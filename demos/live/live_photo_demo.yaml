@@ -8,9 +8,16 @@ actors:
     package: actors.acquire_zmq
     class: ZMQAcquirer
     ip: 10.122.170.21
-    ports: [5000,5008,5009,5010,4701,4703,5865] #[4701,4702,4703]
+    ports: [5000,5008,5009,5010,4701,4703,5865]
+    output: output/
 
   Stimulus:
+    package: actors.photostim
+    class: PhotoStimulus
+    ip: '*'
+    port: 5576
+
+  VisStimulus:
     package: actors.stimulus_binoc
     class: VisualStimulus
     ip: '*'
@@ -18,9 +25,9 @@ actors:
     stimuli: stimuli.npy
 
   Processor:
-    package: demos.naumann.actors.processor
-    class: CaimanProcessor
-    init_filename: data/init_stream.h5
+    package: actors.caiman_processor
+    class: LiveTwoP
+    init_filename: output/initialization.h5
     config_file: live_caiman_params.txt
 
   Visual:
@@ -38,7 +45,7 @@ actors:
 connections:
   Acquirer.q_out: [Processor.q_in, Visual.raw_frame_queue]
   Processor.q_out: [Analysis.q_in]
-  Analysis.q_out: [Visual.q_in]
+  Analysis.q_out: [Visual.q_in, Stimulus.q_in]
+  Analysis.stim_out: [VisStimulus.q_in]
   Acquirer.stim_queue: [Analysis.input_stim_queue, Visual.stim_in]
-  Analysis.stim_out: [Stimulus.q_in]
   Stimulus.q_out: [Visual.optim_in]

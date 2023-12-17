@@ -28,9 +28,7 @@ class CaimanProcessor(Actor):
     Uses code from caiman/source_extraction/cnmf/online_cnmf.py
     """
 
-    def __init__(
-        self, *args, init_filename="data/Tolias_mesoscope_2.hdf5", config_file=None
-    ):
+    def __init__(self, *args, init_filename, config_file):
         super().__init__(*args)
         logger.info("initfile {}, config file {}".format(init_filename, config_file))
         self.param_file = config_file
@@ -41,7 +39,7 @@ class CaimanProcessor(Actor):
         """Create OnACID object and initialize it
         (runs initialize online)
         """
-        logger.info("Running setup for " + self.name)
+        logger.info("Running setup for " + self.name + " using sample CaimanProcessor ")
         self.done = False
         self.dropped_frames = []
         self.coords = None

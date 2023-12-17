@@ -1,4 +1,5 @@
 import os
+import time
 import uuid
 import signal
 import logging
@@ -22,6 +23,9 @@ from improv.link import Link, MultiLink
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+import matplotlib
+logging.getLogger("matplotlib").setLevel(logging.WARNING)
+
 # TODO: Set up store.notify in async function (?)
 
 
@@ -39,7 +43,7 @@ class Nexus:
         file=None,
         use_hdd=False,
         use_watcher=False,
-        store_size=10000000,
+        store_size=40000000000,
         control_port=0,
         output_port=0,
     ):
@@ -49,6 +53,7 @@ class Nexus:
 
         curr_dt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         logger.info(f"************ new improv server session {curr_dt} ************")
+        logger.info(f"Using store size of %s" % store_size)
 
         # set up socket in lieu of printing to stdout
         self.zmq_context = zmq.Context()
@@ -89,6 +94,7 @@ class Nexus:
         self.actors = {}
         self.flags = {}
         self.processes = []
+        self.p_GUI = None
 
         if file is None:
             logger.exception("Need a config file!")
@@ -170,6 +176,7 @@ class Nexus:
                     logger.info(f"Setting up actor {name}")
                 except Exception as e:
                     logger.error(f"Exception in setting up actor {name}: {e}.")
+                    time.sleep(10)
                     self.quit()
 
         # Second set up each connection b/t actors
@@ -460,7 +467,7 @@ class Nexus:
             except FileNotFoundError:
                 logger.warning("Queue {} corrupted.".format(q.name))
 
-        if self.config.hasGUI:
+        if self.config.hasGUI and self.p_GUI:
             self.processes.append(self.p_GUI)
 
         if self.p_watch:
@@ -551,7 +558,7 @@ class Nexus:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            logger.info("StoreInterface start successful: {}".format(self.store_loc))
+            logger.info("StoreInterface start successful: {}, size {}".format(self.store_loc, size))
         except Exception as e:
             logger.exception("StoreInterface cannot be started: {}".format(e))
 
@@ -573,6 +580,8 @@ class Nexus:
         # Instantiate selected class
         mod = import_module(actor.packagename)
         clss = getattr(mod, actor.classname)
+        print('setting up actor ', actor.name)
+        print(actor.options)
         instance = clss(actor.name, self.store_loc, **actor.options)
 
         if "method" in actor.options.keys():
