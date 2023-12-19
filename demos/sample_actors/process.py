@@ -287,6 +287,7 @@ class CaimanProcessor(Actor):
                 .reshape(self.onAc.dims, order="F"))
             image = ((components + background) - self.onAc.bnd_Y[0]) / np.diff(self.onAc.bnd_Y)
             image = np.minimum((image * 255.0), 255).astype("u1")
+            # logger.error('image mean {}'.format(np.mean(image)))
         except ValueError as ve:
             logger.info("ValueError: {0}".format(ve))
 

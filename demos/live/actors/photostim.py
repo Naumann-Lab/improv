@@ -18,23 +18,25 @@ logger.setLevel(logging.INFO)
 
 class PhotoStimulus(Actor):
 
-    def __init__(self, *args, ip=None, port=None, seed=1234, stimuli = None, **kwargs):
+    def __init__(self, *args, ip=None, port=None, red_chan_image=None, seed=1234, stimuli=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.ip = ip
         self.port = port
+        self.red_chan_image = red_chan_image
         self.frame_num = 0
         self.displayed_stim_num = 0
         self.counter_stim = 0
         self.selected_neuron = None
-        self.rep_count = 5
+        self.rep_count = 3
+        self.img_size = 300
 
         self.seed = 1337 #81 #1337 #7419
         np.random.seed(self.seed)
 
         self.prepared_frame = None
         self.initial=True
-        self.total_stim_time = 30
-        self.wait_initial = 0 #60*5
+        self.total_stim_time = 15
+        self.wait_initial = 0 #60*5*1000
 
         self.stopping_list = []
         self.peak_list = []
@@ -54,6 +56,14 @@ class PhotoStimulus(Actor):
 
         self.stimmed_neurons = []
 
+        ### Using red channel info to help select neurons for photostimulation
+        logger.error('Waiting to collect red_channel files')
+        while not os.path.exists(self.red_chan_image):
+            time.sleep(1)
+        logger.error('The red channel image file {} now exists'.format(self.red_chan_image))
+        self.red_chan = np.load(self.red_chan_image, allow_pickle=True)
+        logger.info('Size of red chan iamge: {}'.format(self.red_chan.shape))
+
         self.timer = time.time()
         self.total_times = []
         self.timestamp = []
@@ -72,37 +82,44 @@ class PhotoStimulus(Actor):
         
     def runStep(self):
         ### Get data from analysis actor
-        x = None
+        # x = None
         try:
             ids = self.q_in.get(timeout=0.0001)
             (Cx, C, Cpop, tune, color, coords, allStims, y_results, stimText, all_y, tc_list) = self.client.getList(ids[:-1])
             neurons = [o['neuron_id']-1 for o in coords]
             com = np.array([o['CoM'] for o in coords])
             self.frame_num = ids[-1]
-            # print(self.frame_num)
+            # logger.error('{}'.format(self.frame_num))
             x, y, r1, r2 = self.pick_stim_neuron(neurons, com, tune[0], tc_list)
-            # print(x, y, r1, r2)
+            # logger.error('got past pick stim')
+            # logger.error('returned {}, {}, {}, {}'.format(x, y, r1, r2))
+
+            # self.initial = False
+            ### initial run ignores signals and just sends 8 basic stimuli
+            if self.initial:
+                # if self.prepared_frame is None:
+                #     self.prepared_frame = self.send_frame(x, y, r1, r2) #self.initial_frame()
+                    # self.prepared_frame.pop('load')
+                if (time.time() - self.timer) >= self.total_stim_time: # and (time.time() - self.whole_timer) >= self.wait_initial:
+                    # logger.info(x)
+                    if x is not None:
+                        self.prepared_frame = self.send_frame(x, y, r1, r2)
+                        self.send_generate()
+                        self.photo_frames.append(np.array([self.frame_num, self.displayed_stim_num, self.selected_neuron, x, y]))
+                        #self.send_frame(self.prepared_frame)
+                        self.prepared_frame = None
+                        self.timer = time.time()
+                        self.counter_stim += 1
+                        logger.info('sent a photostim')
+                    else:
+                        logger.error('No neurons able to be selected')
 
         except Empty as e:
             pass
         except Exception as e:
-            print('Error in stimulus get: {}'.format(e))
+            logger.error('Error in stimulus get: {}'.format(e))
 
-        # self.initial = False
-        ### initial run ignores signals and just sends 8 basic stimuli
-        if self.initial:
-            # if self.prepared_frame is None:
-            #     self.prepared_frame = self.send_frame(x, y, r1, r2) #self.initial_frame()
-                # self.prepared_frame.pop('load')
-            if (time.time() - self.timer) >= self.total_stim_time and (time.time() - self.whole_timer) >= self.wait_initial:
-                if x:
-                    self.prepared_frame = self.send_frame(x, y, r1, r2)
-                    self.send_generate()
-                    self.photo_frames.append(np.array([self.frame_num, self.displayed_stim_num, self.selected_neuron, x, y]))
-                    #self.send_frame(self.prepared_frame)
-                    self.prepared_frame = None
-                    self.timer = time.time()
-                    self.counter_stim += 1
+        
 
     def send_generate(self):
         dest = "scanner2"
@@ -121,6 +138,7 @@ class PhotoStimulus(Actor):
                 "message".encode(), message.encode(),
             ])
     
+    
     def send_frame(self, x, y, r1, r2):
         # text = {'frequency':30, 'dark_value':0, 'light_value':250, 'texture_size':(1024,1024), 'texture_name':'grating_gray'}
         # stimulus = {'stimulus': stim, 'texture': [text, text]}
@@ -132,12 +150,12 @@ class PhotoStimulus(Actor):
         type = "MC"
         src = "improv"
         id = "333"
-        xyp = '[['+str(400-y)+', '+str(400-x)+']]' #[x, y] ## X AND Y SWAPPED
+        xyp = '[['+str(self.img_size-y)+', '+str(self.img_size-x)+']]' #[x, y] ## X AND Y SWAPPED
         axes = "[1,1]"
-        dsize = "[2,400,400]"
+        dsize = "[2,"+str(self.img_size)+","+str(self.img_size)+"]"
         xy_range = "{\"min\":{\"x\":-4,\"y\":-4},\"max\":{\"x\":4,\"y\":4}}"
 
-        message = 'wf:roi={type=ellipse; xy_pixels='+xyp+'; rint_ext_pixels=[[1,4]]; axes_dir='+axes+'; data_size='+dsize+'; xy_limits='+xy_range+';}'
+        message = 'wf:roi={type=ellipse; xy_pixels='+xyp+'; rint_ext_pixels=[[0,6]]; axes_dir='+axes+'; data_size='+dsize+'; xy_limits='+xy_range+';}'
 
         # message = 'wf:roi={type=ellipse; xy=['+str(x)+', '+str(y)+']; rint_rext=['+str(r1)+', '+str(r2)+']}'
 
@@ -160,40 +178,81 @@ class PhotoStimulus(Actor):
         #dest=scanner ; type=MC ; src=choose-the-name ; id='random number'; message=wf:roi={type=ellipse; xy=[0.1,1.2; 2.4,3.0]; rint_rext=[0.1, 0.3; 0.15, 0.25]}1:20
 
         self.timer = time.time()
-        print('Number of neurons targeted: ', self.displayed_stim_num, ' frame number ', self.frame_num)
-        print('Neuron selected for stim ', self.selected_neuron, ' at ', x, y)
+        logger.info('Number of neurons targeted: {}, {}'.format(self.displayed_stim_num, self.frame_num))
+        logger.info('Neuron selected for stim {} at {}, {}'.format(self.selected_neuron, x, y))
         self.displayed_stim_num += 1
-        self.q_out.put([self.selected_neuron, x, y])
+        self.q_out.put([self.selected_neuron, self.img_size - x, self.img_size - y, self.frame_num])
 
 
     def pick_stim_neuron(self, neurons, com, tune, tc_list):
+        # logger.info('got to pici stim neuron')
+        # # print(tune)
+        # # print(tc_list)
+        # # ll = np.array(tc_list)
+        # # ll[ll==np.inf] = 0
+        # # ll[ll<0] = 0
+        # # left = np.array([-1,-1,1,0])
+        # # candidate = np.argmax(ll.dot(left))
         
-        # print(tune)
-        # print(tc_list)
+    
+        # # if self.counter_stim >= self.rep_count or self.displayed_stim_num < 1:
+        # #     index = candidate #random.choice(neurons) # candidate #.shape[0])
+        # #     # print('tuning curve is ', tune[candidate], 'candidate ', candidate, ' color ', ll[candidate])
+        # #     self.selected_neuron = index
+        # #     self.counter_stim = 0
+        # # else:
+        # #     index = self.selected_neuron
+        # # # print('Selecting neuron # '+str(index)+' for stimulation')
+        # # # print('com is ', com[index])
+        # # x, y = com[index][0], com[index][1]
+        # r1 = [1, 3]
+        # r2 = [1, 3]
+
+        # # x = 300 #150
+        # # y = 200 #100
+
+        ################# 
         # ll = np.array(tc_list)
         # ll[ll==np.inf] = 0
         # ll[ll<0] = 0
         # left = np.array([-1,-1,1,0])
-        # candidate = np.argmax(ll.dot(left))
-        
+        # right = np.array([1,-1,-1,0])
+        # dotted = ll.dot(right) #left)
+        # possibles = np.squeeze(np.argwhere(np.abs(dotted - dotted.max()) < 75)) #50)
+        # # candidate = np.argmax(ll.dot(left))
+        # if len(self.photostimmed_neurons) > 0:
+        #     # print(possibles)
+        #     # print(self.photostimmed_neurons)
+        #     # print(np.append(possibles, self.photostimmed_neurons))
+        #     pp = np.unique(np.append(possibles, self.photostimmed_neurons))
+        #     # print(pp)
+        # else: pp = possibles
     
-        # if self.counter_stim >= self.rep_count or self.displayed_stim_num < 1:
-        #     index = candidate #random.choice(neurons) # candidate #.shape[0])
-        #     # print('tuning curve is ', tune[candidate], 'candidate ', candidate, ' color ', ll[candidate])
-        #     self.selected_neuron = index
-        #     self.counter_stim = 0
-        # else:
-        #     index = self.selected_neuron
-        # # print('Selecting neuron # '+str(index)+' for stimulation')
-        # # print('com is ', com[index])
-        # x, y = com[index][0], com[index][1]
+        if self.counter_stim >= self.rep_count or self.displayed_stim_num < 1:
+            # candidate = possibles[0] 
+            # print(possibles)
+            # print(possibles[0])
+            # print(np.squeeze(possibles))
+            index = random.choice(neurons) #pp)#[0]
+            # print(index)
+            # print(index) #candidate #random.choice(neurons) # candidate #.shape[0])
+            # print('tuning curve is ', tune[candidate], 'candidate ', candidate, ' color ', ll[candidate])
+            self.selected_neuron = index
+            self.counter_stim = 0
+        else:
+            index = self.selected_neuron
+
+        # print('Selecting neuron # '+str(index)+' for stimulation')
+        # print('com is ', com[index])
+        x, y = com[index][0], com[index][1]
         r1 = [1, 3]
         r2 = [1, 3]
 
-        x = 300 #150
-        y = 200 #100
+        # x = 300 #150
+        # y = 200 #100
+        # logger.info('got to return from stim neuron')
 
-        return x, y, r1, r2
+        return x, y, r1, r2 #tune[index], ll[index], pp
 
 
     def create_frame(self, ind):

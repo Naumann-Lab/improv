@@ -49,10 +49,14 @@ class LiveTwoP(CaimanProcessor):
             time.sleep(1)
         logger.error('The initial file {} now exists'.format(self.init_filename))
 
+        ##FIXME
+        import shutil
+        shutil.copy(str(self.param_file), './output/'+str(self.param_file))
+
         self.opts = CNMFParams(params_dict=self.params)
         self.onAc = OnACID(params=self.opts)
 
-        self.onAc.initialize_online(T=10000)
+        self.onAc.initialize_online() #T=10000)
         self.max_shifts_online = self.onAc.params.get("online", "max_shifts_online")
 
         self.fitframe_time = []

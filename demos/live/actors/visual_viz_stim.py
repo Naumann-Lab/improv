@@ -1,16 +1,13 @@
 import time
 import numpy as np
-# import cv2
-from improv.store import ObjectNotFoundError
 from scipy.spatial.distance import cdist
-import colorsys
-from PyQt5 import QtWidgets
-import pyqtgraph as pg
-from .GUI import FrontEnd
-import sys
-from improv.actor import Actor, Signal
 from queue import Empty
 from collections import deque
+from PyQt5 import QtWidgets
+
+from improv.actor import Actor, Signal
+from improv.store import ObjectNotFoundError
+from .GUI import FrontEnd
 
 import logging; logger = logging.getLogger(__name__)
 
@@ -22,7 +19,6 @@ logging.basicConfig(level=logging.INFO,
 class DisplayVisual(Actor):
     ''' Class used to run a GUI + Visual as a single Actor 
     '''
-
     def run(self):
         logger.info('Loading FrontEnd')
         self.app = QtWidgets.QApplication([])
@@ -42,27 +38,16 @@ class DisplayVisual(Actor):
 class CaimanVisualStim(Actor):
     ''' Class for displaying data from caiman processor
     '''
-
-    def __init__(self, *args, showConnectivity=True, stimuli=None, labels=None,  **kwargs):
+    def __init__(self, *args, stimuli=None, labels=None,  **kwargs):
         super().__init__(*args)
 
         self.com1 = np.zeros(2)
         self.selectedNeuron = 0
         self.selectedTune = None
         self.frame_num = 0
-        self.showConnectivity = showConnectivity
 
-        self.stimuli = np.load(stimuli, allow_pickle=True)
-        self.labels = np.load(labels)
-
-        self.stimStatus = dict()
-        for i in range(8):
-            self.stimStatus[i] = deque()
-
-        self.flagN = False
-        self.idsStim = None
-        self.flag = False
-
+        self.red_chan = None
+        self.stimTimes = []
 
     def setup(self):
         self.Cx = None
@@ -71,18 +56,18 @@ class CaimanVisualStim(Actor):
         self.raw = None
         self.color = None
         self.coords = None
-
-        self.curr_est = None
-        self.curr_unc = None
-        self.all_y = None
         self.selected_neuron = None
-        
         self.draw = True
 
         self.total_times = []
         self.timestamp = []
 
         self.window=150
+
+        try:
+            self.red_chan = np.load(self.red_chan_image, allow_pickle=True)
+        except:
+            pass
 
     def run(self):
         pass #NOTE: Special case here, tied to GUI
@@ -107,7 +92,7 @@ class CaimanVisualStim(Actor):
                 raise Empty
             self.frame_num = ids[-1]
             if self.draw:
-                (self.Cx, self.C, self.Cpop, self.tune, self.color, self.coords, self.allStims, self.y_results, self.stimText, self.all_y, self.tc_list) = self.client.getList(ids[:-1])
+                (self.Cx, self.C, self.Cpop, self.tune, self.color, self.coords, self.tc_list) = self.client.getList(ids[:-1])
                 self.total_times.append([time.time(), time.time()-t])
             self.timestamp.append([time.time(), self.frame_num])
         except Empty as e:
@@ -117,25 +102,10 @@ class CaimanVisualStim(Actor):
         except Exception as e:
             logger.error('Visual: Exception in get data: {}'.format(e))
         try:
-            # self.idsStim = self.links['stim_in'].get(timeout=0.0001)
-            self.flag = True
-            # self.frame = idsStim[-1]
-            # (selectedNeuron, self.confidence) = self.client.getList(idsStim)
-            # if selectedNeuron != self.selectedNeuron:
-            #     self.selectedNeuron = selectedNeuron
-            #     print('set seleected neuron ', self.selectedNeuron)
-            #     self.flagN = True
-        except Empty as e:
-            pass
-        except Exception as e:
-            logger.error('Visual: Exception in get stim for visual: {}'.format(e))
-        try:
-            # self.optimized_N, id1, id2 = self.links['optim_in'].get(timeout=0.0001)
-            self.selected_neuron = self.links['optim_in'].get(timeout=0.0001)
-        #     self.curr_est = self.client.getID(id1)
-        #     self.curr_unc = self.client.getID(id2)
-        #     self.selectedNeuron = int(self.optimized_N)
-        #     print('Visualizing neuron under optimization: ', self.selectedNeuron)
+            stim_in = self.links['optim_in'].get(timeout=0.0001)
+            self.selected_neuron = stim_in
+            self.selectedNeuron = int(stim_in[0])
+            self.stimTimes.append(int(stim_in[3]))
         except Empty as e:
             pass
         except Exception as e:
@@ -155,27 +125,15 @@ class CaimanVisualStim(Actor):
             self.tuned = None
 
         if self.frame_num > self.window:
-            # self.Cx = self.Cx[-self.window:]
             self.C = self.C[:, -len(self.Cx):]
             self.Cpop = self.Cpop[-len(self.Cx):]
-            #self.LL = self.LL[-len(self.Cx):]
         
-        return self.Cx, self.C[self.selectedNeuron,:], self.Cpop, self.tuned, self.y_results, self.stimText #self.LL#[:len(self.Cx)]
+        return self.Cx, self.C[self.selectedNeuron,:], self.Cpop
 
     def getFrames(self):
         ''' Return the raw and colored frames for display
         '''
-        # if self.raw is not None and self.raw.shape[0] > self.raw.shape[1]:
-        #     self.raw = np.rot90(self.raw, 1)
-        # if self.color is not None and self.color.shape[0] > self.color.shape[1]:
-        #     self.color = np.rot90(self.color, 1)
-        # self.raw = np.flip(self.raw, axis=0)
-        # self.color = np.flip(self.color, axis=0)
-        tmp = None
-        if self.all_y is not None:
-            tmp = np.squeeze(self.all_y[self.selectedNeuron])
-
-        return self.raw, self.color, self.curr_est, self.curr_unc, tmp
+        return self.raw, self.color
 
     def selectNeurons(self, x, y):
         ''' x and y are coordinates
@@ -202,7 +160,6 @@ class CaimanVisualStim(Actor):
             com = [o['CoM'] for o in self.coords]
             #first = [np.array([self.raw.shape[0]-com[0][1], com[0][0]])]
             first = [np.array([self.raw.shape[0]-com[0][0], self.raw.shape[1]-com[0][1]])]
-            #first = [com[0]]
         return first
 
     

@@ -14,7 +14,7 @@ logger.setLevel(logging.INFO)
 
 class ZMQAcquirer(Actor):
 
-    def __init__(self, *args, ip=None, ports=None, output=None, init_frame=50, **kwargs):
+    def __init__(self, *args, ip=None, ports=None, output=None, red_chan_image=None, init_filename=None, init_frame=120, **kwargs):
         super().__init__(*args, **kwargs)
         print("init")
         self.ip = ip
@@ -23,21 +23,23 @@ class ZMQAcquirer(Actor):
         self.stim_count = 0
         self.initial_frame_num = init_frame     # Number of frames for initialization
         ## FIXME
-        self.init_filename = 'output/initialization.h5'
+        self.init_filename = init_filename #'output/initialization.h5'
+        self.red_chan_image = red_chan_image
         
         self.output_folder = str(output)
         pathlib.Path(output).mkdir(exist_ok=True) 
         pathlib.Path(output+'timing/').mkdir(exist_ok=True)
 
     def setup(self):
-        context = zmq.Context()
-        self.socket = context.socket(zmq.SUB)
+        self.context = zmq.Context()
+        self.socket = self.context.socket(zmq.SUB)
         for port in self.ports:
             self.socket.connect("tcp://"+str(self.ip)+":"+str(port))
             print('Connected to '+str(self.ip)+':'+str(port))
         self.socket.setsockopt(zmq.SUBSCRIBE, b'')
 
         self.saveArray = []
+        self.saveArrayRedChan = []
         self.save_ind = 0
         self.fullStimmsg = []
         self.total_times = []
@@ -57,6 +59,7 @@ class ZMQAcquirer(Actor):
         if not os.path.exists(self.init_filename):
 
             ## Save initial set of frames to output/initialization.h5
+            self.kill_flag = False
             while self.frame_num < self.initial_frame_num:
                 self.runStep()
 
@@ -65,7 +68,23 @@ class ZMQAcquirer(Actor):
             f.create_dataset("default", data=self.imgs)
             f.close()
 
+        if not os.path.exists(self.red_chan_image):
+            if len(self.saveArrayRedChan) > 1:
+                mean_red = np.mean(np.array(self.saveArrayRedChan), axis=0)
+                np.save(self.red_chan_image, mean_red)
+
         self.frame_num = 0
+
+        self.kill_flag = True
+
+        # ## reconnect socket
+        # self.socket.close()
+        # self.socket = context.socket(zmq.SUB)
+        # for port in self.ports:
+        #     self.socket.connect("tcp://"+str(self.ip)+":"+str(port))
+        #     print('RE-Connected to '+str(self.ip)+':'+str(port))
+        # self.socket.setsockopt(zmq.SUBSCRIBE, b'')
+
 
     def stop(self):
         self.imgs = np.array(self.saveArray)
@@ -87,18 +106,68 @@ class ZMQAcquirer(Actor):
         print('Acquire got through ', self.frame_num, ' frames')
 
     def runStep(self):
+
+        if self.kill_flag:
+            self.socket.close()
+            self.context = zmq.Context()
+            self.socket = self.context.socket(zmq.SUB)
+            for port in self.ports:
+                self.socket.connect("tcp://"+str(self.ip)+":"+str(port))
+                print('RE-Connected to '+str(self.ip)+':'+str(port))
+            self.socket.setsockopt(zmq.SUBSCRIBE, b'')
+
+            timer = time.time()
+            while True:
+                msg = self.socket.recv_multipart()
+                if time.time()-timer > 0.02:
+                    self.kill_flag = False
+                    logger.error('Resuming run') 
+                    break
+                logger.info(str(time.time()-timer))
+                timer = time.time()
+
+
+            # cnt = 0
+            # while True:
+            #     try:
+            #         msg = self.socket.recv_multipart()
+            #         logger.info('read and threw away')
+            #         cnt += 1
+            #     except zmq.Again:
+            #         self.kill_flag = False
+            #         logger.error('Resuming run after {} iterations'.format(cnt)) 
+            #         break
+
+            self.kill_flag = False
+
+        #     # timer = time.time()
+        #     while True:
+        #         try:
+        #             msg = self.socket.recv_multipart()
+        #         except zmq.Again:
+        #             self.kill_flag = False
+        #             logger.error('Resuming run') 
+        #             break
+        #     # if time.time()-timer > 0.05:
+        #         # self.kill_flag = False
+        #         # logger.error('Resuming run') 
+
         try:
             self.get_message()
         except zmq.Again:
             # No messages available
             pass 
         except Exception as e:
-            pass # print('error: {}'.format(e))
+            print('error: {}'.format(e))
 
     def get_message(self, timeout=0.001):
         msg = self.socket.recv_multipart() #(flags=zmq.NOBLOCK)
-        msg_dict = self._msg_unpacker(msg)
-        tag = msg_dict['type'] 
+
+        try:
+            msg_dict = self._msg_unpacker(msg)
+            tag = msg_dict['type'] 
+        except:
+            logger.error('Weird format message {}'.format(msg))
 
         if'stim' in tag: 
             if not self.stimF:
@@ -108,10 +177,6 @@ class ZMQAcquirer(Actor):
             self._collect_stimulus(self, msg_dict)
 
         elif 'frame' in tag: 
-            if not self.frameF:
-                logger.info('Receiving frame information')
-                self.frameF = True
-                logger.info('Image frame size is {}'.format(np.array(json.loads(msg_dict['data']))[0].shape))
             t0 = time.time()
             self._collect_frame(msg_dict)
             self.frame_num += 1
@@ -124,11 +189,22 @@ class ZMQAcquirer(Actor):
             self._collect_tail(msg_dict)
 
     def _collect_frame(self, msg_dict):
-        array = np.array(json.loads(msg_dict['data']))[0] #[:,32:]
-        self.saveArray.append(array)
+        array = np.array(json.loads(msg_dict['data']))
+        if not self.frameF:
+            logger.info('Receiving frame information')
+            self.frameF = True
+            logger.info('Image frame(s) size is {}'.format(array.shape))
+            if array.shape[0] == 2:
+                logger.info('Acquiring also in the red channel')
+                # obj_id = self.client.put(array[1], 'acq_red' + str(self.frame_num))
+                # self.links['red_channel'].put({self.frame_num: obj_id})
+        self.saveArray.append(array[0])
+        if array.shape[0] == 2:
+            self.saveArrayRedChan.append(array[1])
+        
         if not self.align_flag:
             array = None
-        obj_id = self.client.put(array, 'acq_raw' + str(self.frame_num))
+        obj_id = self.client.put(array[0], 'acq_raw' + str(self.frame_num))
         self.q_out.put([{str(self.frame_num): obj_id}])
 
         sendtime =  msg_dict['timestamp'] 

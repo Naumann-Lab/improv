@@ -220,13 +220,13 @@ class VisualStimulus(Actor):
             pass
             
         elif self.initial:
-            # pass
-            if self.prepared_frame is None:
-                self.prepared_frame = self.initial_frame()
-                # self.prepared_frame.pop('load')
-            if (time.time() - self.timer) >= self.total_stim_time:
-                self.send_frame(self.prepared_frame)
-                self.prepared_frame = None
+            pass
+            # if self.prepared_frame is None:
+            #     self.prepared_frame = self.initial_frame()
+            #     # self.prepared_frame.pop('load')
+            # if (time.time() - self.timer) >= self.total_stim_time:
+            #     self.send_frame(self.prepared_frame)
+            #     self.prepared_frame = None
 
 
         ### once initial done, or we move on, initial GP with next neuron
@@ -510,7 +510,7 @@ class VisualStimulus(Actor):
         freq = 30 #self.stim_sets[2][2] #[self.which_angle%len(self.stim_sets[2])] #30
 
         ## random sampling for initialization
-        initial_length = 16
+        initial_length = 16*1000
         # angle = np.random.choice(self.stimuli[0])
         # vel = -np.random.choice(self.stimuli[1])
         # freq = np.random.choice(self.stimuli[2])

@@ -43,7 +43,7 @@ class Nexus:
         file=None,
         use_hdd=False,
         use_watcher=False,
-        store_size=40000000000,
+        store_size=80000000000,
         control_port=0,
         output_port=0,
     ):
