@@ -41,7 +41,6 @@ actors:
     package: actors.analysis_viz
     class: VizStimAnalysis
 
-
 connections:
   Acquirer.q_out: [Processor.q_in, Visual.raw_frame_queue]
   Processor.q_out: [Analysis.q_in]

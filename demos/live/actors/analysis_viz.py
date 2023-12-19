@@ -81,6 +81,7 @@ class VizStimAnalysis(Actor):
         print(self.allStims)
         np.save('output/used_stims.npy', np.array(stim))
 
+
     def runStep(self):
         ''' Take numpy estimates and frame_number
             Create X and Y for plotting
