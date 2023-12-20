@@ -92,7 +92,7 @@ class CaimanVisualStim(Actor):
                 raise Empty
             self.frame_num = ids[-1]
             if self.draw:
-                (self.Cx, self.C, self.Cpop, self.tune, self.color, self.coords, self.tc_list) = self.client.getList(ids[:-1])
+                (self.Cx, self.C, self.Cpop, self.tune, self.color, self.coords, self.allStims, self.tc_list) = self.client.getList(ids[:-1])
                 self.total_times.append([time.time(), time.time()-t])
             self.timestamp.append([time.time(), self.frame_num])
         except Empty as e:
@@ -135,31 +135,31 @@ class CaimanVisualStim(Actor):
         '''
         return self.raw, self.color
 
-    def selectNeurons(self, x, y):
-        ''' x and y are coordinates
-            identifies which neuron is closest to this point
-            and updates plotEstimates to use that neuron
-        '''
-        neurons = [o['neuron_id']-1 for o in self.coords]
-        com = np.array([o['CoM'] for o in self.coords])
-        dist = cdist(com, [np.array([self.raw.shape[0]-x, self.raw.shape[1]-y])])
-        if np.min(dist) < 50:
-            selected = neurons[np.argmin(dist)]
-            self.selectedNeuron = selected
-            print('ID for selected neuron is :', selected)
-            print(self.tune[0][self.selectedNeuron])
-            self.com1 = [np.array([self.raw.shape[0]-com[selected][0], self.raw.shape[1]-com[selected][1]])]
-        else:
-            logger.error('No neurons nearby where you clicked')
-            self.com1 = [com[0]]
-        return self.com1
+    # def selectNeurons(self, x, y):
+    #     ''' x and y are coordinates
+    #         identifies which neuron is closest to this point
+    #         and updates plotEstimates to use that neuron
+    #     '''
+    #     neurons = [o['neuron_id']-1 for o in self.coords]
+    #     com = np.array([o['CoM'] for o in self.coords])
+    #     dist = cdist(com, [np.array([self.raw.shape[0]-x, self.raw.shape[1]-y])])
+    #     if np.min(dist) < 50:
+    #         selected = neurons[np.argmin(dist)]
+    #         self.selectedNeuron = selected
+    #         print('ID for selected neuron is :', selected)
+    #         print(self.tune[0][self.selectedNeuron])
+    #         self.com1 = [np.array([self.raw.shape[0]-com[selected][0], self.raw.shape[1]-com[selected][1]])]
+    #     else:
+    #         logger.error('No neurons nearby where you clicked')
+    #         self.com1 = [com[0]]
+    #     return self.com1
 
-    def getFirstSelect(self):
-        first = None
-        if self.coords:
-            com = [o['CoM'] for o in self.coords]
-            #first = [np.array([self.raw.shape[0]-com[0][1], com[0][0]])]
-            first = [np.array([self.raw.shape[0]-com[0][0], self.raw.shape[1]-com[0][1]])]
-        return first
+    # def getFirstSelect(self):
+    #     first = None
+    #     if self.coords:
+    #         com = [o['CoM'] for o in self.coords]
+    #         #first = [np.array([self.raw.shape[0]-com[0][1], com[0][0]])]
+    #         first = [np.array([self.raw.shape[0]-com[0][0], self.raw.shape[1]-com[0][1]])]
+    #     return first
 
     

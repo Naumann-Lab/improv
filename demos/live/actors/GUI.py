@@ -120,12 +120,12 @@ class FrontEnd(QtWidgets.QMainWindow, video_photostim.Ui_MainWindow):
         '''
         raw, color = self.visual.getFrames()
         if raw is not None:
-            raw = np.rot90(raw,2)
+            raw = raw.T         ## necessary for plotting only, visuals same as on microscope computer
             if np.unique(raw).size > 1:
                 self.rawplot.setImage(raw) #, autoHistogramRange=False)
                 self.rawplot.ui.histogram.vb.setLimits(yMin=80, yMax=200)
         if color is not None:
-            color = np.rot90(color,2)
+            color = color.T
             self.rawplot_2.setImage(color)
         if self.visual.selected_neuron is not None:
             self._updateRedCirc(self.visual.selected_neuron[1], self.visual.selected_neuron[2])

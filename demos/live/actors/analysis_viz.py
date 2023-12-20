@@ -101,7 +101,8 @@ class VizStimAnalysis(Actor):
             (self.coordDict, self.image, self.C) = self.client.getList(ids[:-1])
             self.C = np.where(np.isnan(self.C), 0, self.C)
 
-            self.coords = [o['coordinates'] for o in self.coordDict]
+            if self.coordDict is not None:
+                self.coords = [o['coordinates'] for o in self.coordDict]
             
             # Compute tuning curves based on input stimulus
             # Just do overall average activity for now
@@ -136,7 +137,6 @@ class VizStimAnalysis(Actor):
                 self.Call = self.C 
 
             self.putAnalysis()
-            self.putStimulus()
             self.timestamp.append([time.time(), self.frame])
             self.total_times.append(time.time()-t)
         except ObjectNotFoundError:
@@ -198,6 +198,7 @@ class VizStimAnalysis(Actor):
         ids.append(self.client.put(self.tune, 'tune'+str(self.frame)))
         ids.append(self.client.put(self.color, 'color'+str(self.frame)))
         ids.append(self.client.put(self.coordDict, 'analys_coords'+str(self.frame)))
+        ids.append(self.client.put(self.allStims, 'stim'+str(self.frame)))
         ids.append(self.client.put(self.tc_list, 'tc_list'))
         ids.append(self.frame)
 
@@ -213,8 +214,8 @@ class VizStimAnalysis(Actor):
             diff = ests.shape[0] - self.ests.shape[0]
             # added more neurons, grow the array
             self.ests = np.pad(self.ests, ((0,diff),(0,0),(0,0)), mode='constant')
-            for key in self.ys.keys():
-                self.ys[key] = np.pad(self.ys[key], ((0,diff),(0,0),(0,0)), mode='constant')
+            # for key in self.ys.keys():
+            #     self.ys[key] = np.pad(self.ys[key], ((0,diff),(0,0),(0,0)), mode='constant')
            
         before_amount = 5
         after_amount = 20
@@ -225,18 +226,18 @@ class VizStimAnalysis(Actor):
                 self.ests[:,self.currentStim,1] = (self.counter[self.currentStim,1]*self.ests[:,self.currentStim,1] + mean_val)/(self.counter[self.currentStim,1]+1)
                 self.counter[self.currentStim, 1] += before_amount
 
-                for key in self.ys.keys():
-                    ind = self.xs[key]
-                    try:
-                        self.ys[key][:,ind,1] = (self.counters[key][ind,1]*self.ys[key][:,ind,1] + mean_val[:,None])/(self.counters[key][ind,1]+1)
-                    except:
-                        print(key)
-                        print(self.ys[key][:,ind,1].shape)
-                        print(self.counters[key][ind,1].shape)
-                        print(mean_val.shape)
-                        print(((self.counters[key][ind,1]*self.ys[key][:,ind,1] + mean_val[:,None])/(self.counters[key][ind,1]+1)).shape)
+                # for key in self.ys.keys():
+                #     ind = self.xs[key]
+                #     try:
+                #         self.ys[key][:,ind,1] = (self.counters[key][ind,1]*self.ys[key][:,ind,1] + mean_val[:,None])/(self.counters[key][ind,1]+1)
+                #     except:
+                #         print(key)
+                #         print(self.ys[key][:,ind,1].shape)
+                #         print(self.counters[key][ind,1].shape)
+                #         print(mean_val.shape)
+                #         print(((self.counters[key][ind,1]*self.ys[key][:,ind,1] + mean_val[:,None])/(self.counters[key][ind,1]+1)).shape)
 
-                    self.counters[key][ind, 1] += before_amount
+                    # self.counters[key][ind, 1] += before_amount
                     
 
             elif self.frame in range(self.stimStart+1, self.stimStart+2):
@@ -244,25 +245,25 @@ class VizStimAnalysis(Actor):
                 self.ests[:,self.currentStim,1] = (self.counter[self.currentStim,1]*self.ests[:,self.currentStim,1] + val)/(self.counter[self.currentStim,1]+1)
                 self.counter[self.currentStim, 1] += 1
 
-                for key in self.ys.keys():
-                    ind = self.xs[key]
-                    try:
-                        self.ys[key][:,ind,1] = (self.counters[key][ind,1]*self.ys[key][:,ind,1] + val[:,None])/(self.counters[key][ind,1]+1)
-                    except:    
-                        print(key)
-                        print(self.ys[key][:,ind,1].shape)
-                        print(self.counters[key][ind,1].shape)
-                    self.counters[key][ind, 1] += 1
+                # for key in self.ys.keys():
+                #     ind = self.xs[key]
+                #     try:
+                #         self.ys[key][:,ind,1] = (self.counters[key][ind,1]*self.ys[key][:,ind,1] + val[:,None])/(self.counters[key][ind,1]+1)
+                #     except:    
+                #         print(key)
+                #         print(self.ys[key][:,ind,1].shape)
+                #         print(self.counters[key][ind,1].shape)
+                #     self.counters[key][ind, 1] += 1
 
             elif self.frame in range(self.stimStart+2, self.stimStart+after_amount):
                 val = ests[:,self.frame-1]
                 self.ests[:,self.currentStim,0] = (self.counter[self.currentStim,0]*self.ests[:,self.currentStim,0] + val)/(self.counter[self.currentStim,0]+1)
                 self.counter[self.currentStim, 0] += 1
 
-                for key in self.ys.keys():
-                    ind = self.xs[key]
-                    self.ys[key][:,ind,0] = (self.counters[key][ind,0]*self.ys[key][:,ind,0] + val[:,None])/(self.counters[key][ind,0]+1)
-                    self.counters[key][ind, 0] += 1
+                # for key in self.ys.keys():
+                #     ind = self.xs[key]
+                #     self.ys[key][:,ind,0] = (self.counters[key][ind,0]*self.ys[key][:,ind,0] + val[:,None])/(self.counters[key][ind,0]+1)
+                #     self.counters[key][ind, 0] += 1
 
         self.estsAvg = np.squeeze(self.ests[:,:,0] - self.ests[:,:,1])        
         self.estsAvg = np.where(np.isnan(self.estsAvg), 0, self.estsAvg)
@@ -275,7 +276,7 @@ class VizStimAnalysis(Actor):
         ''' Computes colored nicer background+components frame
         '''
         t = time.time()
-        image = self.image
+        image = self.image.copy()
         color = np.stack([image, image, image, image], axis=-1).astype(np.uint8).copy()
         color[...,3] = 255
         tc_list = []
@@ -289,7 +290,7 @@ class VizStimAnalysis(Actor):
                     tc_list.append(tc)
                     cv2.fillConvexPoly(color, pixels, tc)
                 except Exception as e:
-                    # logger.error('Error in fill poly: {}'.format(e)).
+                    logger.error('Error in fill poly: {}'.format(e))
                     pass
                 
         self.colortime.append(time.time()-t)

@@ -12,6 +12,7 @@ actors:
     output: output/
     red_chan_image: output/red_channel_image.npy
     init_filename: output/initialization.h5
+    init_frame: 120
 
   Stimulus:
     package: actors.photostim

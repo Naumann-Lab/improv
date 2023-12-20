@@ -14,7 +14,7 @@ logger.setLevel(logging.INFO)
 
 class ZMQAcquirer(Actor):
 
-    def __init__(self, *args, ip=None, ports=None, output=None, red_chan_image=None, init_filename=None, init_frame=120, **kwargs):
+    def __init__(self, *args, ip=None, ports=None, output=None, red_chan_image=None, init_filename=None, init_frame=60, **kwargs):
         super().__init__(*args, **kwargs)
         print("init")
         self.ip = ip
@@ -22,8 +22,7 @@ class ZMQAcquirer(Actor):
         self.frame_num = 0
         self.stim_count = 0
         self.initial_frame_num = init_frame     # Number of frames for initialization
-        ## FIXME
-        self.init_filename = init_filename #'output/initialization.h5'
+        self.init_filename = init_filename 
         self.red_chan_image = red_chan_image
         
         self.output_folder = str(output)
@@ -126,31 +125,7 @@ class ZMQAcquirer(Actor):
                 logger.info(str(time.time()-timer))
                 timer = time.time()
 
-
-            # cnt = 0
-            # while True:
-            #     try:
-            #         msg = self.socket.recv_multipart()
-            #         logger.info('read and threw away')
-            #         cnt += 1
-            #     except zmq.Again:
-            #         self.kill_flag = False
-            #         logger.error('Resuming run after {} iterations'.format(cnt)) 
-            #         break
-
             self.kill_flag = False
-
-        #     # timer = time.time()
-        #     while True:
-        #         try:
-        #             msg = self.socket.recv_multipart()
-        #         except zmq.Again:
-        #             self.kill_flag = False
-        #             logger.error('Resuming run') 
-        #             break
-        #     # if time.time()-timer > 0.05:
-        #         # self.kill_flag = False
-        #         # logger.error('Resuming run') 
 
         try:
             self.get_message()
@@ -196,8 +171,6 @@ class ZMQAcquirer(Actor):
             logger.info('Image frame(s) size is {}'.format(array.shape))
             if array.shape[0] == 2:
                 logger.info('Acquiring also in the red channel')
-                # obj_id = self.client.put(array[1], 'acq_red' + str(self.frame_num))
-                # self.links['red_channel'].put({self.frame_num: obj_id})
         self.saveArray.append(array[0])
         if array.shape[0] == 2:
             self.saveArrayRedChan.append(array[1])

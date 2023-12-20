@@ -161,33 +161,7 @@ class CaimanProcessor(Actor):
             except Exception as e:
                 logger.exception("File cannot be loaded. {0}".format(e))
         else:
-            # defaults from demo scripts; CNMFParams does not set
-            # each parameter needed by default (TODO change that?)
-            # TODO add parameter validation inside Config
-            params_dict = {
-                "fnames": [cwd + self.init_filename],
-                "fr": 2,
-                "decay_time": 0.8,
-                "gSig": (3, 3),
-                "p": 1,
-                "min_SNR": 1.5,
-                "rval_thr": 1,
-                "ds_factor": 1,
-                "nb": 2,
-                "motion_correct": True,
-                "init_batch": 100,
-                "init_method": "bare",
-                "normalize": True,
-                "sniper_mode": True,
-                "K": 10,
-                "epochs": 1,
-                "max_shifts_online": 10,
-                "pw_rigid": False,
-                "dist_shape_update": True,
-                "show_movie": False,
-                "minibatch_shape": 100,
-            }
-        self.client.put(params_dict, "params_dict")
+            logger.exception("Caiman needs a parameters file")
 
         return params_dict
 
@@ -227,8 +201,6 @@ class CaimanProcessor(Actor):
         t6 = time.time()
 
         self.q_out.put(ids)
-
-        # self.q_comm.put([self.frame_number])
 
         self.putAnalysis_time.append([time.time() - t, t2 - t, t3 - t2, t4 - t3, t5 - t4, t6 - t5])
 
