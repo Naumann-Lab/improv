@@ -8,7 +8,7 @@ actors:
     package: actors.acquire_zmq
     class: ZMQAcquirer
     ip: 10.122.170.21
-    ports: [5000,5008,5009,5010,4701,4703,5865,5867,5577]
+    ports: [5000,5008,5009,5010,4701,4703,5865,5867,5577,5005,5015,5016]
     output: output/
     red_chan_image: output/red_channel_image.npy
     init_filename: output/initialization.h5

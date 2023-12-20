@@ -149,7 +149,7 @@ class ZMQAcquirer(Actor):
                 logger.info('Receiving stimulus information')
                 self.stimF = True
             self.fullStimmsg.append(msg)
-            self._collect_stimulus(self, msg_dict)
+            self._collect_stimulus(msg_dict)
 
         elif 'frame' in tag: 
             t0 = time.time()

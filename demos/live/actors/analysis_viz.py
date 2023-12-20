@@ -158,34 +158,35 @@ class VizStimAnalysis(Actor):
         whichStim = stim[frame][0]
         # convert stimID into 8 cardinal directions
         stimID = self.IDstim(int(whichStim))
+        logger.info('stimID {}'.format(stimID))
 
         # assuming we have one of those 8 stimuli
         if stimID != -10:
             if stimID not in self.allStims.keys():
                 self.allStims.update({stimID:[]})
             # determine if this is a new stimulus trial
-            if abs(stim[frame][1])>1 :
-                curStim = 1 #on
-                self.allStims[stimID].append(frame)
-            else:
-                curStim = 0 #off
+            # if abs(stim[frame][1])>1 :
+            curStim = 1 #on
+            self.allStims[stimID].append(frame)
+            # else:
+            #     curStim = 0 #off
             # paradigm for these trials is for each stim: [off, on, off]
-            if self.lastOnOff is None:
-                self.lastOnOff = curStim
-            elif curStim == 1: #self.lastOnOff == 0 and curStim == 1: #was off, now on
+            # if self.lastOnOff is None:
+            #     self.lastOnOff = curStim
+            # elif curStim == 1: #self.lastOnOff == 0 and curStim == 1: #was off, now on
                 # select this frame as the starting point of the new trial
                 # and stimulus has started to be shown
                 # All other computations will reference this point
-                self.stimStart = frame 
-                self.currentStim = stimID
-                if stimID<8:
-                    self.currStimID[stimID, frame] = 1
-                # NOTE: this overwrites historical info on past trials
-                logger.info('Stim {} started at {}'.format(stimID,frame))
-            else:
-                self.currStimID[:, frame] = np.zeros(8)
-            print('Frame: ', frame, 'On off :', self.lastOnOff)
-            print('Current data frame is ', self.frame)
+            self.stimStart = frame 
+            self.currentStim = stimID
+            if stimID<8:
+                self.currStimID[stimID, frame] = 1
+            # NOTE: this overwrites historical info on past trials
+            logger.info('Stim {} started at {}'.format(stimID,frame))
+            # else:
+            # #     self.currStimID[:, frame] = np.zeros(8)
+            # logger.info('Frame: {}, {}'.format(frame,self.lastOnOff))
+            # logger.info('Current data frame is {}'.format(self.frame))
 
     def putAnalysis(self):
         ''' Throw things to DS and put IDs in queue for Visual

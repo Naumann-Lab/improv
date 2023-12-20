@@ -36,7 +36,7 @@ class PhotoStimulus(Actor):
         self.prepared_frame = None
         self.initial=True
         self.total_stim_time = 30
-        self.wait_initial = 0 #60*5*1000
+        self.wait_initial = 60*5*1000
 
         self.stopping_list = []
         self.peak_list = []
@@ -91,7 +91,7 @@ class PhotoStimulus(Actor):
 
             # logger.info('2')
             if coords is not None:
-                logger.info('com is {}'.format(com))
+                # logger.info('com is {}'.format(com))
                 neurons = [o['neuron_id']-1 for o in coords]
                 com = np.array([o['CoM'] for o in coords])
             self.frame_num = ids[-1]
@@ -100,7 +100,7 @@ class PhotoStimulus(Actor):
             ### initial run ignores signals and just sends 8 basic stimuli
             if self.initial:
                 # logger.info('4')
-                if (time.time() - self.timer) >= self.total_stim_time: # and (time.time() - self.whole_timer) >= self.wait_initial:
+                if (time.time() - self.timer) >= self.total_stim_time and (time.time() - self.whole_timer) >= self.wait_initial:
                     x, y, r1, r2, rcI = self.pick_stim_neuron(neurons, com, tune[0], tc_list)
                     # logger.error('returned {}, {}, {}, {}'.format(x, y, r1, r2))
                     # logger.info('5')
