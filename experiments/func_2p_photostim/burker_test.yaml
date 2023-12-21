@@ -1,0 +1,50 @@
+actors:
+  GUI: 
+    package: actors.visual_viz_stim
+    class: DisplayVisual
+    visual: Visual
+
+  Acquirer:
+    package: experiments.common_actors.acquire_zmq 
+    class: ZMQAcquirer
+    ip: 172.25.11.192
+    ports: [50152] 
+    init_frames: 50
+    output: output
+    init_filename: data/init_stream.h5
+
+  Stimulus:
+    package: actors.photostim_bruker 
+    class: PhotoStimulus
+    ip: '*'
+    port: 5576
+
+  VisStimulus:
+    package: experiments.common_actors.stimulus_binoc
+    class: VisualStimulus
+    ip: '*'
+    port: 5006 
+
+  Processor:
+    package: experiments.common_actors.caiman_processor
+    class: CaimanProcessor
+    init_filename: data/init_stream.h5
+    config_file: live_caiman_params.txt
+
+  Visual:
+    package: actors.visual_viz_stim
+    class: CaimanVisualStim
+  
+  Analysis: 
+    package: actors.analysis_viz
+    class: VizStimAnalysis
+    stimuli: stimuli.npy
+
+
+connections:
+  Acquirer.q_out: [Processor.q_in, Visual.raw_frame_queue]
+  Processor.q_out: [Analysis.q_in]
+  Analysis.q_out: [Visual.q_in, Stimulus.q_in]
+  Analysis.stim_out: [VisStimulus.q_in]
+  Acquirer.stim_queue: [Analysis.input_stim_queue, Visual.stim_in]
+  Stimulus.q_out: [Visual.optim_in]
