@@ -1,9 +1,9 @@
 import time
 import os
+import sys
 import h5py
 import struct
 import numpy as np
-import random
 import ipaddress
 import zmq
 import json
@@ -18,32 +18,24 @@ logger.setLevel(logging.INFO)
 
 class PhotoStimulus(Actor):
 
-    def __init__(self, *args, ip=None, port=None, red_chan_image=None, seed=1234, stimuli=None, **kwargs):
+    def __init__(self, *args, ip=None, port=None, seed=1234, stimuli=None, selected_tune = None, **kwargs): 
         super().__init__(*args, **kwargs)
         self.ip = ip
         self.port = port
-        self.red_chan_image = red_chan_image
         self.frame_num = 0
         self.displayed_stim_num = 0
-        self.counter_stim = 0
         self.selected_neuron = None
         self.rep_count = 3
         self.img_size = 400
 
-        self.seed = 1337 #81 #1337 #7419
+        self.selected_tune = selected_tune
+        if self.selected_tune is None:
+            self.selected_tune = 'forward' # default tuning is Forward
+
+        self.seed = 1337 # what is seed for?
         np.random.seed(self.seed)
 
-        self.prepared_frame = None
-        self.initial=True
-        self.total_stim_time = 30
-        self.wait_initial = 0 #60*5*1000
-
-        self.stopping_list = []
-        self.peak_list = []
-        self.goback_neurons = []
-        self.optim_f_list = []
-
-        self.photo_frames = []
+        self.photo_frames = [] # will be saved later as the photostim output file
 
     def setup(self):
         context = zmq.Context()
@@ -55,15 +47,6 @@ class PhotoStimulus(Actor):
         self.stimulus_topic = 'stim'
 
         self.stimmed_neurons = []
-
-        ### Using red channel info to help select neurons for photostimulation
-        # logger.error('Waiting to collect red_channel files')
-        # while not os.path.exists(self.red_chan_image):
-        #     time.sleep(1)
-        # logger.error('The red channel image file {} now exists'.format(self.red_chan_image))
-        # rc = np.load(self.red_chan_image, allow_pickle=True)
-        # self.red_chan = 255*(rc-rc.min()) / (rc-rc.min()).max()
-        # logger.info('Size of red chan iamge: {}'.format(self.red_chan.shape))
 
         self.timer = time.time()
         self.total_times = []
@@ -79,127 +62,59 @@ class PhotoStimulus(Actor):
         print('Stim got through ', self.frame_num, ' frames')
         np.save('output/photostims.npy', np.array(self.photo_frames))
         
-    def runStep(self):
-        ### Get data from analysis actor
-        x = None
-        neurons = None
-        com = None
+    def runStep(self):       
+
+        ### Get data from analysis actor and gui 'actor' aka the visual viz stim
+        params_dict = None
+        stim_coords = None
         try:
-            ids = self.q_in.get(timeout=0.0001)
-            # logger.info('1')
-            (Cx, C, Cpop, tune, color, coords, allStims, tc_list) = self.client.getList(ids[:-1])
+            # visual actor (via the gui) sends in a photostim params dictionary
+            _params_dict = self.q_params_in.get(timeout=0.0001) 
+            params_dict = self.client.getList(_params_dict)[0] # dictionary is in a list, so need to index into it
 
-            # logger.info('2')
-            if coords is not None:
-                logger.info('com is {}'.format(com))
-                neurons = [o['neuron_id']-1 for o in coords]
-                com = np.array([o['CoM'] for o in coords])
-            self.frame_num = ids[-1]
-            # logger.info('3')
-            # self.initial = False
-            ### initial run ignores signals and just sends 8 basic stimuli
-            if self.initial:
-                # logger.info('4')
-                if (time.time() - self.timer) >= self.total_stim_time: # and (time.time() - self.whole_timer) >= self.wait_initial:
-                    x, y, r1, r2, rcI = self.pick_stim_neuron(neurons, com, tune[0], tc_list)
-                    # logger.error('returned {}, {}, {}, {}'.format(x, y, r1, r2))
-                    # logger.info('5')
-                    if x is not None:
-                        # logger.info('6')
-                        self.prepared_frame = self.send_frame(x, y, r1, r2)
-                        self.send_generate()
-                        self.photo_frames.append(np.array([self.frame_num, self.displayed_stim_num, self.selected_neuron, x, y]))
-                        self.prepared_frame = None
-                        self.timer = time.time()
-                        self.counter_stim += 1
-                        logger.info('sent a photostim for neuron rc intensity {}'.format(rcI))
-                    else:
-                        logger.error('No neurons able to be selected')
+            ids = self.q_in.get(timeout=0.0001) # analysis actor sends in full info about all neuron functional identity
+            # what I want to get:
+            (C, tune, coords, planes, color) = self.client.getList(ids[:-1]) # index -1 is the frame number
+            # coords = array of coordinates, tune = array of tuning categories for each neuron, C is calcium activity over time for each neuron, color = color of neuron, planes = plane that cell is on
+        
+            # collecting the coordinates to be stimulated based on specified functional identity
+            tune_arr = np.array(tune)
+            neur_ids = np.where(tune_arr == self.selected_tune)[0]
+            stim_coords = coords[neur_ids] # coordinates may be swapped??
+            params_dict['points'] = stim_coords
+            
+            # needs to be the neuron index from the analysis to grab the neuron for plotting
+            params_dict['neur_id'] = neur_ids 
 
+            # specify galvo version
+            if params_dict['procedure'] == 'galvo':
+                if len(neur_ids) > 1: 
+                    params_dict['procedure'] = 'galvo_2D'
+
+
+            if (params_dict is not None) & (stim_coords is not None): # only stimulate if you are sent a parameter dictionary and have coords to stimulate
+                logger.info('{}'.format('photostim is starting'))
+                self.photo_frames.append(np.array(['start_photostim', time.time()])) # mark when the photostim starts in time stamp
+                self.photostim_via_PL(params_dict)
+                self.photo_frames.append(np.array(['finish_photostim', self.frame_num, self.selected_tune, params_dict, time.time()]))
+                logger.info('{}'.format('photostim success'))
+                self.q_out.put([neur_ids, stim_coords[:, 0], stim_coords[:, 1], self.frame_num])
+                if len(stim_coords) == 0:
+                    logger.info('{}'.format('no photostim today'))
+                    self.photo_frames.append(np.array(['no_photostim', time.time()]))
         except Empty as e:
             pass
         except Exception as e:
             logger.error('Error in stimulus get: {}'.format(e))
 
-    def send_generate(self):
-        dest = "scanner2"
-        type = "MC"
-        src = "improv"
-        id = "333"
-        message = 'wf:generate'
 
-        self.socket.send_multipart(
-            [
-                "dest".encode(), dest.encode(),
-                "type".encode(), type.encode(),
-                "src".encode(), src.encode(),
-                "id".encode(), id.encode(),
-                "message".encode(), message.encode(),
-            ])
-    
-    def send_frame(self, x, y, r1, r2):
-        dest = "scanner2"
-        type = "MC"
-        src = "improv"
-        id = "333"
-        xyp = '[['+str(x)+', '+str(y)+']]' #[x, y] 
-        rintext = '[['+str(r1)+', '+str(r2)+']]'
-        axes = "[1,1]"
-        dsize = "[2,"+str(self.img_size)+","+str(self.img_size)+"]"
-        xy_range = "{\"min\":{\"x\":-4,\"y\":-4},\"max\":{\"x\":4,\"y\":4}}"
-
-        message = 'wf:roi={type=ellipse; xy_pixels='+xyp+'; rint_ext_pixels='+rintext+'; axes_dir='+axes+'; data_size='+dsize+'; xy_limits='+xy_range+';}'
-
-        self.socket.send_multipart(
-            [
-                "dest".encode(), dest.encode(),
-                "type".encode(), type.encode(),
-                "src".encode(), src.encode(),
-                "id".encode(), id.encode(),
-                "xy_pixels".encode(), xyp.encode(),
-                "axes dir".encode(), axes.encode(),
-                "data_size".encode(), dsize.encode(),
-                "xy_limits".encode(), xy_range.encode(),
-                "message".encode(), message.encode(),
-            ])
-
-        self.timer = time.time()
-        logger.info('Number of neurons targeted: {}, {}'.format(self.displayed_stim_num, self.frame_num))
-        logger.info('Neuron selected for stim {} at {}, {}'.format(self.selected_neuron, x, y))
-        self.displayed_stim_num += 1
-        self.q_out.put([self.selected_neuron, x, y, self.frame_num])
-
-
-    def pick_stim_neuron(self, neurons, com, tune, tc_list):
-
-        ## compute rc intensity for all neurons in rough area
-        ## TODO: using coords? that isn't the area however
-        # rc = self.red_chan
-        # rg = 3
-        # rcI = []
-        # for nn in range(com.shape[0]):
-        #     cx = int(com[nn][0])
-        #     cy = int(com[nn][1])
-        #     rcI.append(np.sum(rc[cx-rg:cx+rg, cy-rg:cy+rg]))
-        # maxI = np.argmax(np.array(rcI))
-
-        try:
-            if self.counter_stim >= self.rep_count or self.displayed_stim_num < 1:
-                index = random.choice(neurons) # maxI #
-                self.selected_neuron = index
-                self.counter_stim = 0
-            else:
-                index = self.selected_neuron
-
-            x, y = com[index][1], com[index][0]         ##THIS IS WHERE X AND Y ARE SWAPPED CORRECTLY
-        except:
-            x, y = 350, 100
-
-        r1 = 1
-        r2 = 2
-
-        return x, y, r1, r2, None # rcI[self.selected_neuron]
-
+    ### TODO: put in photostimulation script here to run on the Bruker
+            
+    def photostim_via_PL(self):
+        ####
+        sys.path.append('/home/user/Code/bruker2P_control') 
+        from markpoints import ZMQ_Photostim_Client
+        # does this function handle both galvos and slm?
 
 ## old neuron selection criteria
 # logger.info('got to pici stim neuron')

@@ -7,7 +7,7 @@ actors:
   Acquirer:
     package: experiments.common_actors.acquire_zmq 
     class: ZMQAcquirer
-    ip: 172.25.11.192
+    ip: 10.196.188.207
     ports: [50152] 
     init_frames: 50
     output: output
@@ -18,6 +18,7 @@ actors:
     class: PhotoStimulus
     ip: '*'
     port: 5576
+    selected_tune: forward
 
   VisStimulus:
     package: experiments.common_actors.stimulus_binoc
@@ -48,3 +49,4 @@ connections:
   Analysis.stim_out: [VisStimulus.q_in]
   Acquirer.stim_queue: [Analysis.input_stim_queue, Visual.stim_in]
   Stimulus.q_out: [Visual.optim_in]
+  Stimulus.q_params_in: [Visual.params_dict]

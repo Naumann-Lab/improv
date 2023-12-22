@@ -12,11 +12,6 @@ from .GUI import FrontEnd
 import logging; logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# logging.basicConfig(level=logging.INFO,
-#                     format='%(asctime)s %(message)s',
-#                     handlers=[logging.FileHandler("example1.log"),
-#                               logging.StreamHandler()])
-
 class DisplayVisual(Actor):
     ''' Class used to run a GUI + Visual as a single Actor 
     '''
@@ -39,12 +34,12 @@ class DisplayVisual(Actor):
 class CaimanVisualStim(Actor):
     ''' Class for displaying data from caiman processor
     '''
-    def __init__(self, *args, **kwargs):
+    def __init__(self, selectedTune, *args, **kwargs):
         super().__init__(*args)
 
         self.com1 = np.zeros(2)
         self.selectedNeuron = 0
-        self.selectedTune = None
+        self.selectedTune = selectedTune
         self.frame_num = 0
 
         self.red_chan = None
@@ -76,7 +71,7 @@ class CaimanVisualStim(Actor):
     def getData(self):
         t = time.time()
         ids = None
-        try:
+        try: # getting raw image data to display
             id = self.links['raw_frame_queue'].get(timeout=0.0001)
             self.raw_frame_number = list(id[0].keys())[0]
             self.raw = self.client.getID(id[0][self.raw_frame_number])
@@ -84,7 +79,8 @@ class CaimanVisualStim(Actor):
             pass
         except Exception as e:
             logger.error('Visual: Exception in get data: {}'.format(e))
-        try: 
+        
+        try: # getting information from analysis actor on functional identity and coordinates of cells
             ids = self.q_in.get(timeout=0.0001)
             if ids is not None and ids[0]==1:
                 print('visual: missing frame')
@@ -102,7 +98,8 @@ class CaimanVisualStim(Actor):
             logger.error('Object not found, continuing anyway...')
         except Exception as e:
             logger.error('Visual: Exception in get data: {}'.format(e))
-        try:
+        
+        try: # getting the stimulated neuron's information
             stim_in = self.links['optim_in'].get(timeout=0.0001)
             self.selected_neuron = stim_in
             self.selectedNeuron = int(stim_in[0])
