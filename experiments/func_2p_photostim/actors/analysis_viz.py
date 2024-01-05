@@ -19,14 +19,14 @@ class VizStimAnalysis(Actor):
         np.seterr(divide='ignore')
 
         # TODO: same as behaviorAcquisition, need number of stimuli here. Make adaptive later
-        self.num_stim = 12 
+        self.num_stim = 12 # change this to include all the monocular stims
         self.frame = 0
         # self.curr_stim = 0 #start with zeroth stim unless signaled otherwise
         self.stim = {}
         self.stimStart = -1
         self.currentStim = None
         self.ests = np.zeros((1, self.num_stim, 2)) #number of neurons, number of stim, on and baseline
-        self.counter = np.ones((self.num_stim,2))
+        self.counter = np.ones((self.num_stim,2)) # stim counter?
         self.window = 150 #TODO: make user input, choose scrolling window for Visual
         self.C = None
         self.S = None
@@ -90,13 +90,14 @@ class VizStimAnalysis(Actor):
         ids = None
         
         try:
-            ids = self.q_in.get(timeout=0.0001)
+            ids = self.q_in.get(timeout=0.0001) # from processor actor 
             if ids is not None and ids[0]==1:
                 print('analysis: missing frame')
                 self.total_times.append(time.time()-t)
                 self.q_out.put([1])
                 raise Empty
 
+            # collecting neuronal activity data
             self.frame = ids[-1]
             (self.coordDict, self.image, self.C) = self.client.getList(ids[:-1])
             self.C = np.where(np.isnan(self.C), 0, self.C)
@@ -108,7 +109,9 @@ class VizStimAnalysis(Actor):
             # Just do overall average activity for now
             try: 
                 ## stim format: stim, stimonOff, angle, vel, freq, contrast
-                sig = self.links['input_stim_queue'].get(timeout=0.0001)
+
+                # how am I getting the input_stim_queue from the analysis actor, when this is the analysis actor?
+                sig = self.links['input_stim_queue'].get(timeout=0.0001) 
                 self.updateStim_start(sig)
                 self.stimText = list(sig.values())
             except Empty as e:
@@ -117,11 +120,23 @@ class VizStimAnalysis(Actor):
             self.stimAvg_start()
             
             self.globalAvg = np.mean(self.estsAvg[:,:8], axis=0)
-            self.tune = [self.estsAvg[:,:8], self.globalAvg]
+            self.tune = [self.estsAvg[:,:8], self.globalAvg] # what does this tune part look like? and this is global?
 
             # Compute coloring of neurons for processed frame
             # Also rotate and stack as needed for plotting
             self.color, self.tc_list = self.plotColorFrame()
+            
+            ## TODO: Add in my analysis function here...I want to keep all the coloring for visualization 
+
+            # identify the tuning colors with a ID (i.e. forward for most green)
+            # remap to dictionary? just do it without a for loop
+
+            # or make a new analysis function that is the unbiased clustering analysis?
+
+            # can i make a new analysis that only will run once the stimulus is done and before I want to start anything else?
+            # maybe connect this to the gui with an 'analyze' button - would run the unbiased clustering algorithm that I have already made
+            
+            # or pause improv after I collect the functional information and then start it again?
 
             if self.frame >= self.window:
                 window = self.window
@@ -136,7 +151,8 @@ class VizStimAnalysis(Actor):
                     logger.error('Nan in Cpop')
                 self.Call = self.C 
 
-            self.putAnalysis()
+            self.putAnalysis() # sends out the analysis info here
+
             self.timestamp.append([time.time(), self.frame])
             self.total_times.append(time.time()-t)
         except ObjectNotFoundError:
@@ -192,83 +208,67 @@ class VizStimAnalysis(Actor):
         '''
         t = time.time()
         ids = []
-        ids.append(self.client.put(self.Cx, 'Cx'+str(self.frame)))
-        ids.append(self.client.put(self.Call, 'Call'+str(self.frame)))
-        ids.append(self.client.put(self.Cpop, 'Cpop'+str(self.frame)))
-        ids.append(self.client.put(self.tune, 'tune'+str(self.frame)))
-        ids.append(self.client.put(self.color, 'color'+str(self.frame)))
-        ids.append(self.client.put(self.coordDict, 'analys_coords'+str(self.frame)))
-        ids.append(self.client.put(self.allStims, 'stim'+str(self.frame)))
-        ids.append(self.client.put(self.tc_list, 'tc_list'))
+        ids.append(self.client.put(self.Cx, 'Cx'+str(self.frame))) #x axis of time
+        ids.append(self.client.put(self.Call, 'Call'+str(self.frame))) # ??
+        ids.append(self.client.put(self.Cpop, 'Cpop'+str(self.frame))) # population activity
+        ids.append(self.client.put(self.tune, 'tune'+str(self.frame))) # tuning curves
+        ids.append(self.client.put(self.color, 'color'+str(self.frame))) # color of each neuron
+        ids.append(self.client.put(self.coordDict, 'analys_coords'+str(self.frame))) # coordinates of each neuron
+        ids.append(self.client.put(self.allStims, 'stim'+str(self.frame))) # all the tested stimuli
+        ids.append(self.client.put(self.tc_list, 'tc_list')) # tuning curve list?
         ids.append(self.frame)
 
         self.q_out.put(ids)
         self.puttime.append(time.time()-t)
 
     def stimAvg_start(self):
+        '''
+        Computing the average cell activity during the stimulus on portion
+        '''
+
         t = time.time()
 
-        ests = self.C
+        ests = self.C # estimates
         
         if self.ests.shape[0]<ests.shape[0]:
             diff = ests.shape[0] - self.ests.shape[0]
             # added more neurons, grow the array
             self.ests = np.pad(self.ests, ((0,diff),(0,0),(0,0)), mode='constant')
-            # for key in self.ys.keys():
-            #     self.ys[key] = np.pad(self.ys[key], ((0,diff),(0,0),(0,0)), mode='constant')
            
         before_amount = 5
         after_amount = 20
+
+        ## TODO: what exactly is being saved here?
+
         if self.currentStim is not None:
             if self.stimStart == self.frame:
                 # account for the baseline prior to stimulus onset
-                mean_val = np.mean(ests[:,self.frame-before_amount:self.frame],1)
-                self.ests[:,self.currentStim,1] = (self.counter[self.currentStim,1]*self.ests[:,self.currentStim,1] + mean_val)/(self.counter[self.currentStim,1]+1)
-                self.counter[self.currentStim, 1] += before_amount
+                mean_val = np.mean(ests[:,self.frame-before_amount:self.frame],1) #baseline mean value
 
-                # for key in self.ys.keys():
-                #     ind = self.xs[key]
-                #     try:
-                #         self.ys[key][:,ind,1] = (self.counters[key][ind,1]*self.ys[key][:,ind,1] + mean_val[:,None])/(self.counters[key][ind,1]+1)
-                #     except:
-                #         print(key)
-                #         print(self.ys[key][:,ind,1].shape)
-                #         print(self.counters[key][ind,1].shape)
-                #         print(mean_val.shape)
-                #         print(((self.counters[key][ind,1]*self.ys[key][:,ind,1] + mean_val[:,None])/(self.counters[key][ind,1]+1)).shape)
-
-                    # self.counters[key][ind, 1] += before_amount
+                # normalized to baseline response for the current stimulus?? unsure here
+                self.ests[:,self.currentStim,1] = (self.counter[self.currentStim,1]*self.ests[:,self.currentStim,1] + 
+                                                   mean_val) / (self.counter[self.currentStim,1]+1)
+                self.counter[self.currentStim, 1] += before_amount # why add a couple more?
                     
-
+            # if the image frame is the next frame post stimulus onset, then add the value from that frame
             elif self.frame in range(self.stimStart+1, self.stimStart+2):
                 val = ests[:,self.frame-1]
-                self.ests[:,self.currentStim,1] = (self.counter[self.currentStim,1]*self.ests[:,self.currentStim,1] + val)/(self.counter[self.currentStim,1]+1)
+                self.ests[:,self.currentStim,1] = (self.counter[self.currentStim,1]*self.ests[:,self.currentStim,1] + 
+                                                   val)/(self.counter[self.currentStim,1]+1)
                 self.counter[self.currentStim, 1] += 1
 
-                # for key in self.ys.keys():
-                #     ind = self.xs[key]
-                #     try:
-                #         self.ys[key][:,ind,1] = (self.counters[key][ind,1]*self.ys[key][:,ind,1] + val[:,None])/(self.counters[key][ind,1]+1)
-                #     except:    
-                #         print(key)
-                #         print(self.ys[key][:,ind,1].shape)
-                #         print(self.counters[key][ind,1].shape)
-                #     self.counters[key][ind, 1] += 1
-
+            # if the image frame is the next couple frames post stimulus onset, then add the value from that frame
             elif self.frame in range(self.stimStart+2, self.stimStart+after_amount):
                 val = ests[:,self.frame-1]
-                self.ests[:,self.currentStim,0] = (self.counter[self.currentStim,0]*self.ests[:,self.currentStim,0] + val)/(self.counter[self.currentStim,0]+1)
+                self.ests[:,self.currentStim,0] = (self.counter[self.currentStim,0]*self.ests[:,self.currentStim,0] + 
+                                                   val)/(self.counter[self.currentStim,0]+1)
                 self.counter[self.currentStim, 0] += 1
-
-                # for key in self.ys.keys():
-                #     ind = self.xs[key]
-                #     self.ys[key][:,ind,0] = (self.counters[key][ind,0]*self.ys[key][:,ind,0] + val[:,None])/(self.counters[key][ind,0]+1)
-                #     self.counters[key][ind, 0] += 1
 
         self.estsAvg = np.squeeze(self.ests[:,:,0] - self.ests[:,:,1])        
         self.estsAvg = np.where(np.isnan(self.estsAvg), 0, self.estsAvg)
         self.estsAvg[self.estsAvg == np.inf] = 0
         self.estsAvg[self.estsAvg<0] = 0
+        # now we have an estimates average for all the neurons per stimulus
 
         self.stimtime.append(time.time()-t)
 
@@ -317,6 +317,10 @@ class VizStimAnalysis(Actor):
             or, for k coloring, length 8
             Using specific coloring scheme from Naumann lab
         '''
+
+        # add in here more color ids for the increased number of stimuli
+        # or keep binocular and monocular separate...
+
         if x.shape[0] == 8:
             mat_weight = np.array([
             [1, 0.25, 0],
@@ -368,6 +372,9 @@ class VizStimAnalysis(Actor):
         ''' Function to convert stim ID from Naumann lab experiment into
             the 8 cardinal directions they correspond to.
         ''' 
+
+        # how do these stim numbers correspond??
+
         stim = -10
         if s == 3:
             stim = 0

@@ -7,15 +7,15 @@ from PyQt5 import QtWidgets
 
 from improv.actor import Actor, Signal
 from improv.store import ObjectNotFoundError
-from .GUI import FrontEnd
+
+# this is Anne's gui imported here 
+# from .GUI import FrontEnd 
+
+# need this import for my GUI to work
+from .GUI_paramset import FrontEnd 
 
 import logging; logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
-# logging.basicConfig(level=logging.INFO,
-#                     format='%(asctime)s %(message)s',
-#                     handlers=[logging.FileHandler("example1.log"),
-#                               logging.StreamHandler()])
 
 class DisplayVisual(Actor):
     ''' Class used to run a GUI + Visual as a single Actor 
@@ -43,32 +43,31 @@ class CaimanVisualStim(Actor):
         super().__init__(*args)
 
         self.com1 = np.zeros(2)
-        self.selectedNeuron = 0
-        self.selectedTune = None
+        self.selectedNeuron = 0 # default is the first neuron
+        self.selected_group = 'forward' # default tuning is forward, can change this
         self.frame_num = 0
 
         self.red_chan = None
         self.stimTimes = []
 
     def setup(self):
-        self.Cx = None
-        self.C = None
-        self.tune = None
+        # these variables are collected from other actors
+        self.Cx = None # x axis time overall
+        self.C = None # fluorescence traces
+        self.tune = None 
         self.raw = None
         self.color = None
         self.coords = None
-        self.selected_neuron = None
-        self.draw = True
+
+        self.selected_neuron = 0 # default selected neuron is cell 0
+        self.draw = True # keyword to have updated visualizations
 
         self.total_times = []
         self.timestamp = []
 
         self.window=150
 
-        try:
-            self.red_chan = np.load(self.red_chan_image, allow_pickle=True)
-        except:
-            pass
+        self.red_chan = None # don't have red channel images yet
 
     def run(self):
         pass #NOTE: Special case here, tied to GUI
@@ -76,7 +75,8 @@ class CaimanVisualStim(Actor):
     def getData(self):
         t = time.time()
         ids = None
-        try:
+        
+        try: # getting raw image data to display
             id = self.links['raw_frame_queue'].get(timeout=0.0001)
             self.raw_frame_number = list(id[0].keys())[0]
             self.raw = self.client.getID(id[0][self.raw_frame_number])
@@ -84,7 +84,8 @@ class CaimanVisualStim(Actor):
             pass
         except Exception as e:
             logger.error('Visual: Exception in get data: {}'.format(e))
-        try: 
+        
+        try: # getting information from analysis actor on functional identity and coordinates of cells
             ids = self.q_in.get(timeout=0.0001)
             if ids is not None and ids[0]==1:
                 print('visual: missing frame')
@@ -102,11 +103,18 @@ class CaimanVisualStim(Actor):
             logger.error('Object not found, continuing anyway...')
         except Exception as e:
             logger.error('Visual: Exception in get data: {}'.format(e))
-        try:
-            stim_in = self.links['optim_in'].get(timeout=0.0001)
-            self.selected_neuron = stim_in
-            self.selectedNeuron = int(stim_in[0])
-            self.stimTimes.append(int(stim_in[3]))
+        
+        try: # getting the photostimulated neuron's information to be displayed on gui
+
+            # this is what is received: ([neur_ids, stim_coords[:, 0], stim_coords[:, 1], self.selected_group, self.frame_num]) 
+            photostim_info = self.links['optim_in'].get(timeout=0.0001) 
+            self.stimmed_neurons = photostim_info[0] # neuron ids
+            self.stimmed_xcoords = photostim_info[1] # x coords
+            self.stimmed_ycoords = photostim_info[2] # y coords
+
+            self.selected_group = photostim_info[3] # functional identity
+
+            self.stimTimes.append(int(photostim_info[4])) # frame number of photostimulation
         except Empty as e:
             pass
         except Exception as e:
@@ -119,48 +127,23 @@ class CaimanVisualStim(Actor):
             C is indexed for selected neuron and Cpop is the population avg
             tune is a similar list to C
         '''
+        # get tuning curve? need to look at analysis actor to understand what 'tune' is
         if self.tune is not None:
-            self.selectedTune = self.tune[0][self.selectedNeuron]
-            self.tuned = [self.selectedTune, self.tune[1]]
+            self.tuned = [self.selected_group, self.tune[1]]
         else:
             self.tuned = None
 
+        # fluoresence traces of the selected neuron id
         if self.frame_num > self.window:
             self.C = self.C[:, -len(self.Cx):]
             self.Cpop = self.Cpop[-len(self.Cx):]
         
-        return self.Cx, self.C[self.selectedNeuron,:], self.Cpop
+        return self.Cx, self.C[self.selected_neuron,:], self.Cpop
 
     def getFrames(self):
         ''' Return the raw and colored frames for display
         '''
         return self.raw, self.color
 
-    # def selectNeurons(self, x, y):
-    #     ''' x and y are coordinates
-    #         identifies which neuron is closest to this point
-    #         and updates plotEstimates to use that neuron
-    #     '''
-    #     neurons = [o['neuron_id']-1 for o in self.coords]
-    #     com = np.array([o['CoM'] for o in self.coords])
-    #     dist = cdist(com, [np.array([self.raw.shape[0]-x, self.raw.shape[1]-y])])
-    #     if np.min(dist) < 50:
-    #         selected = neurons[np.argmin(dist)]
-    #         self.selectedNeuron = selected
-    #         print('ID for selected neuron is :', selected)
-    #         print(self.tune[0][self.selectedNeuron])
-    #         self.com1 = [np.array([self.raw.shape[0]-com[selected][0], self.raw.shape[1]-com[selected][1]])]
-    #     else:
-    #         logger.error('No neurons nearby where you clicked')
-    #         self.com1 = [com[0]]
-    #     return self.com1
-
-    # def getFirstSelect(self):
-    #     first = None
-    #     if self.coords:
-    #         com = [o['CoM'] for o in self.coords]
-    #         #first = [np.array([self.raw.shape[0]-com[0][1], com[0][0]])]
-    #         first = [np.array([self.raw.shape[0]-com[0][0], self.raw.shape[1]-com[0][1]])]
-    #     return first
 
     

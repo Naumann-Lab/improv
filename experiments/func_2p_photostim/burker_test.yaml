@@ -7,7 +7,7 @@ actors:
   Acquirer:
     package: experiments.common_actors.acquire_zmq 
     class: ZMQAcquirer
-    ip: 172.25.11.192
+    ip: 10.196.188.207
     ports: [50152] 
     init_frames: 50
     output: output
@@ -18,9 +18,10 @@ actors:
     class: PhotoStimulus
     ip: '*'
     port: 5576
+    selected_tune: forward # this should be a name/id of your functionally tuned group
 
   VisStimulus:
-    package: experiments.common_actors.stimulus_binoc
+    package: actors.motion_stimulus
     class: VisualStimulus
     ip: '*'
     port: 5006 
@@ -38,13 +39,13 @@ actors:
   Analysis: 
     package: actors.analysis_viz
     class: VizStimAnalysis
-    stimuli: stimuli.npy
-
+    stimuli: stimuli.npy # to get this stimuli.npy file, run the gen_stim.py script
 
 connections:
   Acquirer.q_out: [Processor.q_in, Visual.raw_frame_queue]
   Processor.q_out: [Analysis.q_in]
   Analysis.q_out: [Visual.q_in, Stimulus.q_in]
   Analysis.stim_out: [VisStimulus.q_in]
-  Acquirer.stim_queue: [Analysis.input_stim_queue, Visual.stim_in]
+  Acquirer.stim_queue: [Analysis.input_stim_queue, Visual.stim_in] #somehow do not have the Visual.stim_in?
   Stimulus.q_out: [Visual.optim_in]
+  Stimulus.q_params_in: [Visual.params_dict]
