@@ -178,7 +178,6 @@ padding: 6px
      <property name="font">
       <font>
        <pointsize>12</pointsize>
-       <weight>75</weight>
        <italic>false</italic>
        <bold>true</bold>
       </font>
@@ -199,7 +198,6 @@ padding: 6px
      <property name="font">
       <font>
        <pointsize>12</pointsize>
-       <weight>75</weight>
        <italic>false</italic>
        <bold>true</bold>
       </font>
@@ -665,7 +663,6 @@ padding: 6px
      <property name="font">
       <font>
        <pointsize>12</pointsize>
-       <weight>75</weight>
        <italic>false</italic>
        <bold>true</bold>
       </font>
@@ -687,7 +684,6 @@ padding: 6px
       <font>
        <family>DejaVu Sans</family>
        <pointsize>10</pointsize>
-       <weight>75</weight>
        <bold>true</bold>
       </font>
      </property>
@@ -735,7 +731,6 @@ padding: 6px
      <font>
       <family>DejaVu Sans</family>
       <pointsize>12</pointsize>
-      <weight>75</weight>
       <bold>true</bold>
      </font>
     </property>
@@ -760,7 +755,6 @@ Average</string>
      <font>
       <family>DejaVu Sans</family>
       <pointsize>12</pointsize>
-      <weight>75</weight>
       <bold>true</bold>
      </font>
     </property>
@@ -785,7 +779,6 @@ Neuron</string>
      <font>
       <family>DejaVu Sans</family>
       <pointsize>12</pointsize>
-      <weight>75</weight>
       <bold>true</bold>
      </font>
     </property>
@@ -806,7 +799,6 @@ Neuron</string>
      <font>
       <family>DejaVu Sans</family>
       <pointsize>12</pointsize>
-      <weight>75</weight>
       <bold>true</bold>
      </font>
     </property>
@@ -1535,7 +1527,6 @@ Neuron</string>
      <property name="font">
       <font>
        <pointsize>12</pointsize>
-       <weight>75</weight>
        <italic>false</italic>
        <bold>true</bold>
       </font>
@@ -2042,7 +2033,6 @@ Neuron</string>
      <font>
       <family>DejaVu Sans</family>
       <pointsize>12</pointsize>
-      <weight>75</weight>
       <bold>true</bold>
      </font>
     </property>
@@ -2063,7 +2053,7 @@ Neuron</string>
      <x>0</x>
      <y>0</y>
      <width>1323</width>
-     <height>22</height>
+     <height>38</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuRASP_Display">
