@@ -64,7 +64,7 @@ class FrontEnd(QtWidgets.QMainWindow, video_photostim_paramset.Ui_MainWindow):
         ### TODO: (eventually) make this flexible for number and z plane
         params_dict['procedure'] = 'galvo'
         if self.useSLM.isChecked(): #use the slm if the Use SLM box is checked
-            params_dict['procedure'] = 'slm'
+            params_dict['procedure'] = 'slm-2d'
 
         params_dict['durations'] = [float(self.duration_val.text())]
         params_dict['powers'] = [float(self.laserpower_val.text())]
@@ -73,7 +73,7 @@ class FrontEnd(QtWidgets.QMainWindow, video_photostim_paramset.Ui_MainWindow):
         params_dict['delays'] = [float(self.interpointdelay_val.text())] * neur_number
         params_dict['repetitions'] = [float(self.repetition_val.text())] 
         params_dict['iterations'] = [float(self.iteration_val.text())]
-        params_dict['iteration_delays'] = [float(self.iterationdelay_val.text())] 
+        params_dict['iteration_delay'] = [float(self.iterationdelay_val.text())] 
 
         self.visual.q_params_dict.put([params_dict])
         logger.info('{}'.format('sent photostim parameters dict'))

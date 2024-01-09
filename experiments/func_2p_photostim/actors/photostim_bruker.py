@@ -13,6 +13,10 @@ from queue import Empty
 from scipy.stats import norm
 import random
 
+import sys
+sys.path.append('/home/user/Code/bruker2P_control') 
+from markpoints import ZMQ_Photostim_Client
+
 import logging; logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -28,10 +32,12 @@ class PhotoStimulus(Actor):
         if self.selected_group is None:
             self.selected_group = 'forward' # default tuning is Forward
 
-        self.seed = 1337 # what is seed for?
-        np.random.seed(self.seed) # changes the seed for what??
+        self.seed = 1337 # for consistent testing
+        np.random.seed(self.seed) 
 
-        self.photo_frames = [] # will be saved later as the photostim output file
+        self.photostim_output = {} # will be saved later as the photostim output file
+
+        self.photostim_client = ZMQ_Photostim_Client.Photostim_Client()
 
     def setup(self):
         context = zmq.Context()
@@ -56,17 +62,17 @@ class PhotoStimulus(Actor):
     def stop(self):
         print('Stimulus complete, avg time per frame: ', np.mean(self.total_times))
         print('Stim got through ', self.frame_num, ' frames')
-        np.save('output/photostims.npy', np.array(self.photo_frames))
+        np.save('output/photostims.npy', np.array(self.photostim_output))
         
     def runStep(self):       
 
         ### Get data from analysis actor and gui 'actor' aka the visual_viz_stim
-        self.params_dict = None
+        params_dict = None
         stim_coords = None
         try:
             # visual actor (via the gui) sends in a photostim params dictionary
-            _params_dict = self.q_params_in.get(timeout=0.0001) 
-            self.params_dict = self.client.getList(_params_dict)[0] # dictionary is in a list, so need to index into it
+            q_params_dict = self.q_params_in.get(timeout=0.0001) 
+            params_dict = self.client.getList(q_params_dict)[0] # dictionary is in a list, so need to index into it
 
             analyzed_cells = self.q_in.get(timeout=0.0001) # analysis actor sends in full info about all neuron functional identity
             
@@ -83,24 +89,25 @@ class PhotoStimulus(Actor):
             neur_ids = np.where(tune_arr == self.selected_group) # the cell ids that correspond to the selected functional identity
             stim_coords = coords[neur_ids] # indexing into the coordinate array with the inds of the tuned neurons
             # coordinates may need to be swapped??
-            self.params_dict['points'] = stim_coords # check if this is an array or list...
+            params_dict['points'] = stim_coords # check if this is an array or list...
             
             # needs to be the neuron index from the analysis to grab the neuron for plotting
-            self.params_dict['neur_id'] = neur_ids 
+            params_dict['neur_id'] = neur_ids 
 
             # specify galvo version
-            if self.params_dict['procedure'] == 'galvo':
+            if params_dict['procedure'] == 'galvo':
                 if len(neur_ids) > 1: 
-                    self.params_dict['procedure'] = 'galvo_2D'
+                    params_dict['procedure'] = 'slm-2d'
 
-            if (self.params_dict is not None) & (stim_coords is not None): # only stimulate if you are sent a parameter dictionary and have coords to stimulate
+            if (params_dict is not None) & (stim_coords is not None): # only stimulate if you are sent a parameter dictionary and have coords to stimulate
                 logger.info('{}'.format('photostim is starting'))
-                self.photo_frames.append(np.array(['start_photostim', time.time()])) # mark when the photostim starts in time stamp
+                # will be updated by Owen
+                self.photostim_output.append(np.array(['start_photostim', time.time()])) # mark when the photostim starts in time stamp
                 
-                self.photostim_via_PL(self.params_dict) # run photostim via PL
+                photostim_info = self.photostim_client.send_request(params_dict) # sends params dict to PL, send back information about the photostim event
+                logger.info('{}'.format(photostim_info)) # edit if needed 
 
-                self.photo_frames.append(np.array(['finish_photostim', self.frame_num, self.selected_group, self.params_dict, time.time()]))
-                # append photostim information
+                self.photostim_output.append(np.array(['finish_photostim', self.frame_num, self.selected_group, self.params_dict, time.time()]))
                 logger.info('{}'.format('photostim success'))
 
                 # output is list of neuron ids, x coords, y coords, functional group, and frame number
@@ -108,18 +115,10 @@ class PhotoStimulus(Actor):
 
                 if len(stim_coords) == 0: # debugging - if the length of stim coord list is 0, then no stimulation
                     logger.info('{}'.format('no photostim today'))
-                    self.photo_frames.append(np.array(['no_photostim', time.time()]))
+                    self.photostim_output.append(np.array(['no_photostim', time.time()]))
 
         except Empty as e:
             pass
         except Exception as e:
             logger.error('Error in stimulus get: {}'.format(e))
-
-
-    ### TODO: ask Owen if this would run well
-    def photostim_via_PL(self):
-        sys.path.append('/home/user/Code/bruker2P_control') 
-        from markpoints import ZMQ_Photostim_Client
-
-        my_server = ZMQ_Photostim_Client.Photostim_Server(self)
-        my_server.start_server()
+        

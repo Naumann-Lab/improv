@@ -8,6 +8,15 @@ import cv2
 import logging; logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+
+# goal: need to rewrite this a lot
+# (1) take in the cell data and stimuli information
+# (2) find motion responsive neurons 
+# (3) color the motion responsive neurons
+# (4) make my own IDs for each motion class
+# (5) then will have to edit the GUI and visual actors
+
+
 class VizStimAnalysis(Actor):
 
     def __init__(self, *args, **kwargs):
@@ -90,7 +99,7 @@ class VizStimAnalysis(Actor):
         ids = None
         
         try:
-            ids = self.q_in.get(timeout=0.0001) # from processor actor 
+            ids = self.q_in.get(timeout=0.0001) # from caiman processor actor 
             if ids is not None and ids[0]==1:
                 print('analysis: missing frame')
                 self.total_times.append(time.time()-t)
@@ -98,7 +107,7 @@ class VizStimAnalysis(Actor):
                 raise Empty
 
             # collecting neuronal activity data
-            self.frame = ids[-1]
+            self.frame = ids[-1] # frame number is last in the ids list
             (self.coordDict, self.image, self.C) = self.client.getList(ids[:-1])
             self.C = np.where(np.isnan(self.C), 0, self.C)
 
@@ -110,7 +119,6 @@ class VizStimAnalysis(Actor):
             try: 
                 ## stim format: stim, stimonOff, angle, vel, freq, contrast
 
-                # how am I getting the input_stim_queue from the analysis actor, when this is the analysis actor?
                 sig = self.links['input_stim_queue'].get(timeout=0.0001) 
                 self.updateStim_start(sig)
                 self.stimText = list(sig.values())
@@ -209,7 +217,7 @@ class VizStimAnalysis(Actor):
         t = time.time()
         ids = []
         ids.append(self.client.put(self.Cx, 'Cx'+str(self.frame))) #x axis of time
-        ids.append(self.client.put(self.Call, 'Call'+str(self.frame))) # ??
+        ids.append(self.client.put(self.Call, 'Call'+str(self.frame))) # 
         ids.append(self.client.put(self.Cpop, 'Cpop'+str(self.frame))) # population activity
         ids.append(self.client.put(self.tune, 'tune'+str(self.frame))) # tuning curves
         ids.append(self.client.put(self.color, 'color'+str(self.frame))) # color of each neuron
@@ -228,7 +236,7 @@ class VizStimAnalysis(Actor):
 
         t = time.time()
 
-        ests = self.C # estimates
+        ests = self.C # calcium estimates
         
         if self.ests.shape[0]<ests.shape[0]:
             diff = ests.shape[0] - self.ests.shape[0]
@@ -310,7 +318,7 @@ class VizStimAnalysis(Actor):
                 print('inten is ', inten)
                 print('ests[i] is ', ests[ind])
         else:
-            return (255,255,255,50)
+            return (255,255,255,50) #RG color, last value is the alpha
 
     def manual_Color_Sum(self, x):
         ''' x should be length 12 array for coloring
@@ -355,7 +363,7 @@ class VizStimAnalysis(Actor):
 
         blend = 0.8  
         thresh = 0.1   
-        thresh_max = blend * np.max(color)
+        thresh_max = blend * np.max(color) # what does the blend do?
 
         color = np.clip(color, thresh, thresh_max)
         color -= thresh

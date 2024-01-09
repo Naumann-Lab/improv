@@ -7,7 +7,7 @@ actors:
   Acquirer:
     package: experiments.common_actors.acquire_zmq 
     class: ZMQAcquirer
-    ip: 10.196.188.207
+    ip: 10.196.188.207 #bruker ip
     ports: [50152] 
     init_frames: 50
     output: output
@@ -17,8 +17,8 @@ actors:
     package: actors.photostim_bruker 
     class: PhotoStimulus
     ip: '*'
-    port: 5576
-    selected_tune: forward # this should be a name/id of your functionally tuned group
+    port: 50153
+    selected_tune: 'forward' # this should be a name/id of your functionally tuned group
 
   VisStimulus:
     package: actors.motion_stimulus
@@ -41,6 +41,11 @@ actors:
     class: VizStimAnalysis
     stimuli: stimuli.npy # to get this stimuli.npy file, run the gen_stim.py script
 
+  # Cluster: # making a cluster actor to be able to do the unbiased clustering??
+  #   package: actors.cluster
+  #   class: Cluster
+  #   ip: '*'
+
 connections:
   Acquirer.q_out: [Processor.q_in, Visual.raw_frame_queue]
   Processor.q_out: [Analysis.q_in]
@@ -48,4 +53,4 @@ connections:
   Analysis.stim_out: [VisStimulus.q_in]
   Acquirer.stim_queue: [Analysis.input_stim_queue, Visual.stim_in] #somehow do not have the Visual.stim_in?
   Stimulus.q_out: [Visual.optim_in]
-  Stimulus.q_params_in: [Visual.params_dict]
+  Visual.q_params_dict: [Stimulus.q_params_in]
