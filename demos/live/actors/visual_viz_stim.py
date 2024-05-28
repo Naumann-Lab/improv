@@ -105,7 +105,7 @@ class CaimanVisualStim(Actor):
             stim_in = self.links['optim_in'].get(timeout=0.0001)
             self.selected_neuron = stim_in
             self.selectedNeuron = int(stim_in[0])
-            self.stimTimes.append(int(stim_in[3]))
+            # self.stimTimes.append(int(stim_in[3]))
         except Empty as e:
             pass
         except Exception as e:

@@ -127,8 +127,8 @@ class FrontEnd(QtWidgets.QMainWindow, video_photostim.Ui_MainWindow):
         if color is not None:
             color = color.T
             self.rawplot_2.setImage(color)
-        if self.visual.selected_neuron is not None:
-            self._updateRedCirc(self.visual.selected_neuron[1], self.visual.selected_neuron[2])
+        # if self.visual.selected_neuron is not None:
+        #     self._updateRedCirc(self.visual.selected_neuron[1], self.visual.selected_neuron[2])
 
     def updateLines(self):
         ''' Helper function to plot the line traces

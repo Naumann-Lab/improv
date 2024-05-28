@@ -27,7 +27,7 @@ class PhotoStimulus(Actor):
         self.displayed_stim_num = 0
         self.counter_stim = 0
         self.selected_neuron = None
-        self.rep_count = 3
+        self.rep_count = 5
         self.img_size = 400
 
         self.seed = 1337 #81 #1337 #7419
@@ -35,8 +35,8 @@ class PhotoStimulus(Actor):
 
         self.prepared_frame = None
         self.initial=True
-        self.total_stim_time = 30
-        self.wait_initial = 60*5*1000
+        self.total_stim_time = 15
+        self.wait_initial = 60*8.5 #*1000
 
         self.stopping_list = []
         self.peak_list = []
@@ -44,6 +44,7 @@ class PhotoStimulus(Actor):
         self.optim_f_list = []
 
         self.photo_frames = []
+        self.photostimmed_neurons = []
 
     def setup(self):
         context = zmq.Context()
@@ -101,7 +102,7 @@ class PhotoStimulus(Actor):
             if self.initial:
                 # logger.info('4')
                 if (time.time() - self.timer) >= self.total_stim_time and (time.time() - self.whole_timer) >= self.wait_initial:
-                    x, y, r1, r2, rcI = self.pick_stim_neuron(neurons, com, tune[0], tc_list)
+                    x, y, r1, r2, tuning = self.pick_stim_neuron(neurons, com, tune[0], tc_list)
                     # logger.error('returned {}, {}, {}, {}'.format(x, y, r1, r2))
                     # logger.info('5')
                     if x is not None:
@@ -112,14 +113,15 @@ class PhotoStimulus(Actor):
                         self.prepared_frame = None
                         self.timer = time.time()
                         self.counter_stim += 1
-                        logger.info('sent a photostim for neuron rc intensity {}'.format(rcI))
+                        logger.info('sent a photostim for neuron tuning  {}'.format(tuning))
+                        self.photostimmed_neurons.append(self.selected_neuron)
                     else:
                         logger.error('No neurons able to be selected')
 
         except Empty as e:
             pass
-        except Exception as e:
-            logger.error('Error in stimulus get: {}'.format(e))
+        # except Exception as e:
+        #     logger.error('Error in stimulus get: {}'.format(e))
 
     def send_generate(self):
         dest = "scanner2"
@@ -174,31 +176,70 @@ class PhotoStimulus(Actor):
 
         ## compute rc intensity for all neurons in rough area
         ## TODO: using coords? that isn't the area however
-        # rc = self.red_chan
-        # rg = 3
-        # rcI = []
-        # for nn in range(com.shape[0]):
-        #     cx = int(com[nn][0])
-        #     cy = int(com[nn][1])
-        #     rcI.append(np.sum(rc[cx-rg:cx+rg, cy-rg:cy+rg]))
+        rc = self.red_chan
+        rg = 3
+        rcI = []
+        iList = []
+        for nn in range(com.shape[0]):
+            try:
+                if nn not in self.photostimmed_neurons:
+                    cx = int(com[nn][0])
+                    cy = int(com[nn][1])
+                    inten = np.sum(rc[cx-rg:cx+rg, cy-rg:cy+rg])
+                    if inten > 400: 
+                        rcI.append(nn)
+                        iList.append(inten)
+            except:
+                pass
+        # try:
+        #     logger.info('rcI list {}'.format(rcI))
+        # except: pass
         # maxI = np.argmax(np.array(rcI))
-
+        possibles = None
         try:
-            if self.counter_stim >= self.rep_count or self.displayed_stim_num < 1:
-                index = random.choice(neurons) # maxI #
-                self.selected_neuron = index
-                self.counter_stim = 0
-            else:
-                index = self.selected_neuron
-
-            x, y = com[index][1], com[index][0]         ##THIS IS WHERE X AND Y ARE SWAPPED CORRECTLY
+            ll = np.array(tc_list)
+            ll[ll==np.inf] = 0
+            ll[ll<0] = 0
+            left = np.array([-1,-1,1,0])
+            right = np.array([1,-1,-1,0])
+            dotted = ll.dot(left) #left)
+            possibles = np.squeeze(np.argwhere(np.abs(dotted - dotted.max()) < 75)) #50)
         except:
-            x, y = 350, 100
+            pass
+        # candidate = np.argmax(ll.dot(left))
+        if len(self.photostimmed_neurons) > 0 and possibles is not None and self.photostimmed_neurons[0] is not None:
+            # logger.info('{}'.format(possibles))
+            # logger.info('{}'.format(self.photostimmed_neurons))
+            # print(np.append(possibles, self.photostimmed_neurons))
+            pp = np.unique(np.append(possibles, self.photostimmed_neurons)).tolist()
+            # print(pp)
+        else: pp = possibles.tolist()
 
-        r1 = 1
-        r2 = 2
+        if pp is None: pp = []
 
-        return x, y, r1, r2, None # rcI[self.selected_neuron]
+        # try:
+        if self.counter_stim >= self.rep_count or self.displayed_stim_num < 1:
+            try:
+                pp.extend(rcI)
+            except:
+                try:
+                    pp = [pp].extend(rcI)
+                except:
+                    pass
+            index = random.choice(pp) #rcI) #neurons) # maxI #
+            self.selected_neuron = index
+            self.counter_stim = 0
+        else:
+            index = self.selected_neuron
+
+        x, y = com[index][1], com[index][0]         ##THIS IS WHERE X AND Y ARE SWAPPED CORRECTLY
+        # except:
+        #     x, y = 350, 100
+
+        r1 = 0
+        r2 = 5
+
+        return x, y, r1, r2, ll[index]
 
 
 ## old neuron selection criteria

@@ -49,6 +49,7 @@ class ZMQAcquirer(Actor):
         self.stimsendtimes = []
         self.tailsendtimes = []
         self.tails = []
+        self.photostims = []
 
         self.tailF = False
         self.stimF = False
@@ -67,10 +68,10 @@ class ZMQAcquirer(Actor):
             f.create_dataset("default", data=self.imgs)
             f.close()
 
-        if not os.path.exists(self.red_chan_image):
-            if len(self.saveArrayRedChan) > 1:
-                mean_red = np.mean(np.array(self.saveArrayRedChan), axis=0)
-                np.save(self.red_chan_image, mean_red)
+        # if not os.path.exists(self.red_chan_image):
+        #     if len(self.saveArrayRedChan) > 1:
+        #         mean_red = np.mean(np.array(self.saveArrayRedChan), axis=0)
+        #         np.save(self.red_chan_image, mean_red)
 
         self.frame_num = 0
 
@@ -92,6 +93,7 @@ class ZMQAcquirer(Actor):
         f.close()
 
         np.savetxt('output/stimmed.txt', np.array(self.stimmed))
+        np.savetxt('output/photostimmed_msgs.txt', np.array(self.photostims))
         np.save('output/tails.npy', np.array(self.tails))
         np.savetxt('output/timing/frametimes.txt', np.array(self.frametimes))
         np.savetxt('output/timing/framesendtimes.txt', np.array(self.framesendtimes), fmt="%s")
@@ -144,7 +146,7 @@ class ZMQAcquirer(Actor):
         except:
             logger.error('Weird format message {}'.format(msg))
 
-        if'stim' in tag: 
+        if 'stim' in tag: 
             if not self.stimF:
                 logger.info('Receiving stimulus information')
                 self.stimF = True
@@ -162,6 +164,16 @@ class ZMQAcquirer(Actor):
                 logger.info('Receiving tail information')
                 self.tailF = True
             self._collect_tail(msg_dict)
+
+        elif 'scan' in tag:
+            if 'scanner2' in msg_dict['source']:
+                logger.info('Photostim happened at frame {}'.format(self.frame_num))
+                self.photostims.append(self.frame_num)
+
+        else:
+            logger.info('Had an error in tag: {}'.format(tag))
+            logger.info('{}'.format(msg))
+
 
     def _collect_frame(self, msg_dict):
         array = np.array(json.loads(msg_dict['data']))
@@ -213,19 +225,26 @@ class ZMQAcquirer(Actor):
             pass 
             # print(msg)  
         elif 'motionOn' in category:
-            angle2 = None
-            angle, angle2 = make_tuple(msg_dict['angle'])
-            if angle>=360:
-                angle-=360
-            stim = self._realign_angle(angle)
             self.stim_count += 1
-
-            logger.info('Stimulus: {}, angle: {},{}, frame {}'.format(stim, angle, angle2, self.frame_num))
-            logger.info('Number of stimuli displayed: {}'.format(self.stim_count))
             
-            self.links['stim_queue'].put({self.frame_num:[stim, float(angle), float(angle2)]})
+            ## visual stim with Matt
+            # angle2 = None
+            # angle, angle2 = make_tuple(msg_dict['angle'])
+            # if angle>=360:
+            #     angle-=360
+            # stim = self._realign_angle(angle)
+            # self.links['stim_queue'].put({self.frame_num:[stim, float(angle), float(angle2)]})
+            # self.stimmed.append([self.frame_num, stim, angle, angle2, time.time()])
+            # logger.info('Stimulus: {}, angle: {},{}, frame {}'.format(stim, angle, angle2, self.frame_num))
 
-            self.stimmed.append([self.frame_num, stim, angle, angle2, time.time()])
+            ## spots stim with Karina
+            size = float(msg_dict['circle_radius'])
+            vel = float(msg_dict['velocity'])
+            self.links['stim_queue'].put({self.frame_num:[size, vel]})
+            self.stimmed.append([self.frame_num, size, vel])
+            logger.info('Stimulus: Circle radius {} with velocity {} at frame {}'.format(size, vel, self.frame_num))
+
+            logger.info('Number of stimuli: {}'.format(self.stim_count))
             self.stimsendtimes.append([sendtime])
 
     def _collect_tail(self, msg_dict):
